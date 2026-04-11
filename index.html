@@ -529,6 +529,10 @@ body { font-family: 'Noto Sans JP', sans-serif; background: var(--bg); color: va
     background: #f5f0f0; border-color: #dda0a0;
     text-decoration: line-through; color: var(--muted);
   }
+  .recur-cancel-row.hidden-slot {
+    background: #f0f0f8; border-color: #a0a0cc;
+    text-decoration: line-through; color: #888; opacity: 0.7;
+  }
   .recur-cancel-row .cancel-icon { font-size: 0.8rem; flex-shrink: 0; }
   .recur-cancel-row input[type=checkbox] { display: none; }
 
@@ -1536,17 +1540,25 @@ function openEditModal(day) {
     let recurSection = '';
     if (recurs.length) {
       const cancelledIds = mev[m.name+'_recur_cancel'] || [];
+      const hiddenIds    = mev[m.name+'_recur_hidden'] || [];
       const rows = recurs.map(r => {
         const isCancelled = cancelledIds.includes(r.id);
-        return `<div class="recur-cancel-row ${isCancelled?'cancelled':''}"
+        const isHidden    = hiddenIds.includes(r.id);
+        // 状態：0=実施 1=休み（見え消し） 2=完全非表示
+        const state = isHidden ? 2 : isCancelled ? 1 : 0;
+        const stateLabel = ['この日は実施', 'この日は休み（表示あり）', 'この日は非表示'][state];
+        const stateIcon  = ['↺', '✕', '🚫'][state];
+        const stateCls   = isHidden ? 'cancelled hidden-slot' : isCancelled ? 'cancelled' : '';
+        return `<div class="recur-cancel-row ${stateCls}"
           id="rcrow_${mi}_${r.id}"
-          onclick="toggleRecurCancel(${mi},'${r.id}',this)">
-          <span class="cancel-icon">${isCancelled ? '✕' : '↺'}</span>
+          data-state="${state}"
+          onclick="cycleRecurState(${mi},'${r.id}',this)">
+          <span class="cancel-icon">${stateIcon}</span>
           <span>${esc(r.text)}</span>
-          <span style="margin-left:auto;font-size:0.65rem;color:var(--muted);">${isCancelled?'この日は休み':'この日は実施'}</span>
+          <span style="margin-left:auto;font-size:0.65rem;color:var(--muted);">${stateLabel}</span>
         </div>`;
       }).join('');
-      recurSection = `<div style="font-size:0.72rem;color:var(--recur);margin-bottom:3px;margin-top:6px;">↺ 定例予定（タップでこの日だけ休みに）</div>
+      recurSection = `<div style="font-size:0.72rem;color:var(--recur);margin-bottom:3px;margin-top:6px;">↺ 定例予定（タップで状態切替：実施→休み→非表示）</div>
         <div class="recur-cancel-list" id="rclist_${mi}">${rows}</div>`;
     }
 
@@ -1622,11 +1634,16 @@ function toggleMemo(mi) {
   const hasMemo = document.getElementById('memo_'+mi)?.value.trim();
   btn.textContent = (isOpen || hasMemo) ? '📝 メモあり（クリックで開閉）' : '📝 メモを追加';
 }
-function toggleRecurCancel(mi, rid, rowEl) {
-  rowEl.classList.toggle('cancelled');
-  const isCancelled = rowEl.classList.contains('cancelled');
-  rowEl.querySelector('.cancel-icon').textContent = isCancelled ? '✕' : '↺';
-  rowEl.querySelector('span:last-child').textContent = isCancelled ? 'この日は休み' : 'この日は実施';
+function cycleRecurState(mi, rid, rowEl) {
+  const state = parseInt(rowEl.getAttribute('data-state') || '0');
+  const next  = (state + 1) % 3; // 0→1→2→0
+  const labels = ['この日は実施', 'この日は休み（表示あり）', 'この日は非表示'];
+  const icons  = ['↺', '✕', '🚫'];
+  rowEl.setAttribute('data-state', next);
+  rowEl.querySelector('.cancel-icon').textContent = icons[next];
+  rowEl.querySelector('span:last-child').textContent = labels[next];
+  rowEl.classList.toggle('cancelled', next === 1 || next === 2);
+  rowEl.classList.toggle('hidden-slot', next === 2);
 }
 function closeEditModal() {
   // 閉じる前に必ず自動保存
@@ -1673,10 +1690,16 @@ function saveEditModal(silent) {
     const recurDay = getRecursForMember(editDay, m.name);
     const cancelled = recurDay.map(r => r.id).filter(rid => {
       const row = document.getElementById(`rcrow_${mi}_${rid}`);
-      return row && row.classList.contains('cancelled');
+      return row && parseInt(row.getAttribute('data-state')||'0') === 1;
+    });
+    const hidden = recurDay.map(r => r.id).filter(rid => {
+      const row = document.getElementById(`rcrow_${mi}_${rid}`);
+      return row && parseInt(row.getAttribute('data-state')||'0') === 2;
     });
     if (cancelled.length) allEvents[key][editDay][m.name+'_recur_cancel'] = cancelled;
     else                  delete allEvents[key][editDay][m.name+'_recur_cancel'];
+    if (hidden.length)    allEvents[key][editDay][m.name+'_recur_hidden'] = hidden;
+    else                  delete allEvents[key][editDay][m.name+'_recur_hidden'];
   });
 
   if (!Object.keys(allEvents[key][editDay]).length) delete allEvents[key][editDay];
@@ -2317,9 +2340,11 @@ function buildFlatRangeHtml(from, to) {
       // 定例予定：個別予定があっても両方表示
       if (recurs.length) {
         const cancelledIds = mev[mem.name+'_recur_cancel'] || [];
+        const hiddenIds    = mev[mem.name+'_recur_hidden']  || [];
         const recurHtml = recurs.map(r => cancelledIds.includes(r.id)
-          ? `<span class="ev-chip is-recur" style="text-decoration:line-through;opacity:0.4;">休：${esc(r.text)}</span>`
-          : `<span class="ev-chip is-recur">${esc(r.text)}</span>`).join('');
+          ? (hiddenIds.includes(r.id) ? '' : `<span class="ev-chip is-recur" style="text-decoration:line-through;opacity:0.4;">休：${esc(r.text)}</span>`)
+          : (hiddenIds.includes(r.id) ? '' : `<span class="ev-chip is-recur">${esc(r.text)}</span>`)
+        ).join('');
         chipHtml += recurHtml;
       }
 
@@ -2463,7 +2488,9 @@ function buildCalendarHtml(y, m) {
       // 定例予定：個別予定があっても両方表示
       if (recurs.length) {
         const cancelledIds = mev[d]?.[mem.name+'_recur_cancel'] || [];
+        const hiddenIds    = mev[d]?.[mem.name+'_recur_hidden']  || [];
         const recurHtml = recurs.map(r => {
+          if (hiddenIds.includes(r.id)) return ''; // 完全非表示
           if (cancelledIds.includes(r.id)) {
             return `<span class="ev-chip is-recur" style="text-decoration:line-through;opacity:0.4;" title="この日は休み">休：${esc(r.text)}</span>`;
           }
