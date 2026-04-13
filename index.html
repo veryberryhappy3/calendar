@@ -18,10 +18,10 @@
   --sat-bg:  #f0f0f0;
   --sun-bg:  #ebebeb;
 
-  /* Member identity: clearly distinct grays */
-  --m0-tab:  #333333;   /* 和恵：濃いグレー */
-  --m1-tab:  #666666;   /* 悟志：中グレー */
-  --m2-tab:  #999999;   /* 哲平：明るめグレー */
+  /* Member identity: monotone grays */
+  --m0-tab:  #333333;   /* 和恵 */
+  --m1-tab:  #666666;   /* 悟志 */
+  --m2-tab:  #999999;   /* 哲平 */
 
   /* ── Accent: vivid spot colours for special events ── */
   --acc-red:    #c0241a;
@@ -147,7 +147,7 @@ body { font-family: 'Noto Sans JP', sans-serif; background: var(--bg); color: va
      ════════════════════════════════════ */
   @media (max-width: 680px) {
 
-    /* ── GASバナー・不要要素を非表示 ── */
+    /* ── 不要要素を非表示 ── */
     #gasSetupBanner { display: none !important; }
     .legend { display: none !important; }
     .notice { display: none !important; }
@@ -155,13 +155,9 @@ body { font-family: 'Noto Sans JP', sans-serif; background: var(--bg); color: va
     .holiday-name { display: none; }
     .day-note-area { display: none; }
 
-    /* ── ヘッダー：1行・横スクロール ── */
-    .screen-header {
-      padding: 4px 8px; gap: 4px;
-      flex-wrap: nowrap; overflow-x: auto;
-      -webkit-overflow-scrolling: touch;
-    }
-    .screen-header h1 { font-size: 0.72rem; white-space: nowrap; flex-shrink: 0; }
+    /* ── ヘッダー ── */
+    .screen-header { padding: 4px 8px; gap: 4px; flex-wrap: nowrap; overflow-x: auto; }
+    .screen-header h1 { font-size: 0.7rem; white-space: nowrap; flex-shrink: 0; }
     .header-controls { gap: 4px; flex-wrap: nowrap; }
     .btn { font-size: 0.58rem; padding: 3px 5px; white-space: nowrap; flex-shrink: 0; }
 
@@ -172,14 +168,12 @@ body { font-family: 'Noto Sans JP', sans-serif; background: var(--bg); color: va
     .month-nav-arrow { font-size: 1.5rem; padding: 0 4px; }
     .month-nav-sub { font-size: 0.56rem; margin-top: 0; }
 
-    /* ── カレンダーラッパー ── */
+    /* ── ラッパー・グリッド ── */
     .calendar-wrap {
       padding: 2px 3px 0;
-      height: calc(100dvh - 82px);
+      height: calc(100dvh - 80px);
       display: flex; flex-direction: column; overflow: hidden;
     }
-
-    /* ── グリッド：1画面に収める ── */
     .calendar-grid {
       flex: 1; min-height: 0; overflow: hidden;
       display: grid;
@@ -187,109 +181,101 @@ body { font-family: 'Noto Sans JP', sans-serif; background: var(--bg); color: va
       grid-template-rows: 14px repeat(6, 1fr);
       height: 100%;
     }
-
-    /* 曜日ヘッダー */
-    .day-header {
-      font-size: 0.55rem; padding: 1px;
-      line-height: 14px; height: 14px;
-    }
+    .day-header { font-size: 0.55rem; padding: 1px; line-height: 14px; height: 14px; }
 
     /* ── セル ── */
-    .day-cell {
-      min-height: 0 !important; overflow: hidden;
-      display: flex; flex-direction: column;
-    }
+    .day-cell { min-height: 0 !important; overflow: hidden; display: flex; flex-direction: column; }
     .day-top {
-      padding: 1px 2px; flex-shrink: 0;
-      display: flex; align-items: center;
+      padding: 2px 0 1px; flex-shrink: 0;
+      display: flex; justify-content: center; align-items: center;
     }
+    /* 日付：Googleカレンダー風の丸 */
     .day-num {
-      font-size: 0.62rem !important; font-weight: 700; line-height: 1;
+      font-size: 0.7rem !important; font-weight: 400; line-height: 1;
+      width: 22px; height: 22px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 50%;
     }
+    .day-cell.today .day-top { background: transparent; }
     .day-cell.today .day-num {
-      width: 13px !important; height: 13px !important; font-size: 0.5rem !important;
+      background: #1a1a1a !important; color: #fff !important;
+      font-size: 0.7rem !important; width: 22px !important; height: 22px !important;
     }
+    .day-cell.sat-cell .day-num,
+    .day-cell.sun-cell .day-num,
+    .day-cell.holiday-cell .day-num { color: #b03030; }
+    .day-cell.sat-cell .day-top,
+    .day-cell.sun-cell .day-top,
+    .day-cell.holiday-cell .day-top { background: transparent; }
 
-    /* ── メンバー行を横並びに変更 ── */
-    /* メンバーを縦3行→横1行に変える */
+    /* ── メンバー行：頭文字＋細いバー ── */
     .member-rows {
       flex: 1; min-height: 0; overflow: hidden;
       display: flex; flex-direction: column;
-      border-top: 0.5px solid var(--border);
+      padding: 1px 2px 1px; gap: 1px;
+      border-top: none;
     }
-    /* 全メンバーをまとめて1つのエリアに */
     .member-slot {
-      min-height: 0 !important; overflow: hidden;
-      border-bottom: none;
-      padding: 0;
+      flex: 1; min-height: 0 !important;
+      display: flex; align-items: center;
+      border-bottom: none; overflow: hidden; gap: 2px;
     }
-    /* 名前バッジ非表示 */
-    .m-tab { display: none; }
-    .m-badge { display: none; }
-    .m-content { padding: 0 1px; min-width: 0; width: 100%; }
+    /* 定例のみ・空スロットは非表示 */
+    .member-slot.empty-slot { display: none; }
+    .member-slot:not(.empty-slot):not(:has(.ev-chip:not(.is-recur))):not(:has(.slot-span-badge)) {
+      display: none;
+    }
 
-    /* ── 予定テキスト：Googleカレンダー風バッジ ── */
+    /* 左カラーバーのみ表示（名前は非表示） */
+    .m-tab { display: block !important; width: 3px; flex-shrink: 0; }
+    .m-badge { display: none !important; }
+
+    .m-content { flex: 1; min-width: 0; padding: 0; overflow: hidden; }
+
+    /* ── 予定テキスト：細いバー（デフォルトはグレー） ── */
     .ev-chip {
-      font-size: 0.5rem; line-height: 1.3;
-      display: block; overflow: hidden;
-      white-space: nowrap; text-overflow: ellipsis;
-      margin-bottom: 1px;
-      border-radius: 2px;
-      padding: 0 2px;
+      font-size: 0; display: block; overflow: hidden;
+      white-space: nowrap; width: 100%;
+      height: 4px; border-radius: 2px;
+      margin-bottom: 0; line-height: 0;
+      background: #999; opacity: 0.7;
     }
-    /* 個別予定：色付きバッジ風 */
-    .slot-0 .m-content .ev-chip:not(.is-recur) {
-      background: rgba(51,51,51,0.12);
-      color: #222; font-weight: 600;
-    }
-    .slot-1 .m-content .ev-chip:not(.is-recur) {
-      background: rgba(102,102,102,0.12);
-      color: #333; font-weight: 600;
-    }
-    .slot-2 .m-content .ev-chip:not(.is-recur) {
-      background: rgba(153,153,153,0.15);
-      color: #444; font-weight: 600;
-    }
-    /* 定例：さらに薄く */
-    .ev-chip.is-recur {
-      font-size: 0.44rem; color: #888; opacity: 0.9;
-    }
-    .ev-chip.is-recur::before { content: ''; }
+    /* アクセントカラー付きのみ色付き */
+    .ev-chip.acc-red    { background: var(--acc-red) !important; opacity: 1; }
+    .ev-chip.acc-orange { background: var(--acc-orange) !important; opacity: 1; }
+    .ev-chip.acc-blue   { background: var(--acc-blue) !important; opacity: 1; }
+    .ev-chip.acc-green  { background: var(--acc-green) !important; opacity: 1; }
+    .ev-chip.acc-purple { background: var(--acc-purple) !important; opacity: 1; }
+    .ev-chip.acc-teal   { background: var(--acc-teal) !important; opacity: 1; }
+    /* 定例：非表示 */
+    .ev-chip.is-recur { display: none !important; }
 
-    /* 連続予定バッジ */
+    /* 連続予定バッジ：アクセントカラーのバー */
     .slot-span-badge {
-      font-size: 0.5rem !important; padding: 1px 2px !important;
-      margin-bottom: 1px; display: block;
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-      box-shadow: none !important; width: 100%; box-sizing: border-box;
-      border-radius: 2px !important; letter-spacing: -0.01em;
-      line-height: 1.3;
+      font-size: 0 !important; height: 4px !important;
+      padding: 0 !important; display: block;
+      width: 100%; box-sizing: border-box;
+      border-radius: 2px !important; box-shadow: none !important;
+      margin-bottom: 0; line-height: 0; opacity: 0.9;
     }
 
     /* 今日 */
-    .day-cell.today {
-      box-shadow: inset 0 0 0 1.5px #1a1a1a;
-      background: #fffef0 !important;
-    }
+    .day-cell.today { box-shadow: none; background: transparent !important; }
 
     /* モーダル：画面下から */
     .modal-overlay { align-items: flex-end; }
-    .modal {
-      width: 100vw; max-height: 88vh;
-      border-radius: 16px 16px 0 0;
-      padding: 16px 14px 32px;
-    }
+    .modal { width: 100vw; max-height: 90vh; border-radius: 16px 16px 0 0; padding: 16px 14px 40px; }
     .modal-wide { width: 100vw; }
-    .modal-actions { position: sticky; bottom: 0; background: var(--surface); padding-top: 8px; }
-    .btn-ok { width: 100%; padding: 12px; font-size: 0.9rem; border-radius: 8px; }
+    .modal-actions { position: sticky; bottom: 0; background: var(--surface); padding-top: 10px; }
+    .btn-ok { width: 100%; padding: 14px; font-size: 1rem; border-radius: 10px; }
+    .modal textarea { font-size: 1rem !important; min-height: 60px; }
   }
 
-  /* 極小画面（390px以下）*/
+  /* 極小画面 */
   @media (max-width: 390px) {
-    .calendar-wrap { height: calc(100dvh - 76px); }
+    .calendar-wrap { height: calc(100dvh - 74px); }
     .screen-header h1 { display: none; }
-    .day-num { font-size: 0.55rem !important; }
-    .ev-chip { font-size: 0.44rem; }
+    .day-num { font-size: 0.62rem !important; width: 20px !important; height: 20px !important; }
   }
 
   /* Span colour: applied to individual member-slot level only */
@@ -1971,65 +1957,103 @@ function setSyncStatus(s) {
   if (s === 'error') showToast('⚠ 同期に失敗しました', 'error');
 }
 
+// ── 同期ロック：同時に複数の同期が走らないようにする ──
+let _syncLock = false;
+let _syncPending = false;
+
 async function syncToGAS() {
   if (!gasUrl) return;
+
+  // すでに同期中なら「保留」フラグを立てて終了
+  if (_syncLock) { _syncPending = true; return; }
+  _syncLock = true;
   setSyncStatus('syncing');
+
+  // 送信前のスナップショット（失敗時のロールバック用）
+  const snapshot = {
+    allEvents:   JSON.parse(JSON.stringify(allEvents)),
+    recurEvents: JSON.parse(JSON.stringify(recurEvents)),
+    spanEvents:  JSON.parse(JSON.stringify(spanEvents)),
+  };
+
   try {
-    // ① まずGASから最新データを取得
+    // ① GASから最新データを取得
     const loadRes = await fetch(gasUrl + '?action=load', { redirect:'follow' });
     const loadJson = await loadRes.json();
 
     if (loadJson.status === 'ok' && loadJson.data) {
       const remote = loadJson.data;
 
-      // ② IDベースでマージ（ローカルの変更を優先しつつリモートの追加も保持）
-
-      // recurEvents：IDで突き合わせ、ローカルにないリモートのものを追加
-      if (remote.recurEvents && remote.recurEvents.length) {
+      // ② recurEvents：IDベースマージ
+      if (remote.recurEvents?.length) {
         const localIds = new Set(recurEvents.map(r => r.id));
-        remote.recurEvents.forEach(r => {
-          if (!localIds.has(r.id)) recurEvents.push(r);
-        });
+        remote.recurEvents.forEach(r => { if (!localIds.has(r.id)) recurEvents.push(r); });
       }
 
-      // spanEvents：IDで突き合わせ、ローカルにないリモートのものを追加
-      if (remote.spanEvents && remote.spanEvents.length) {
+      // ③ spanEvents：IDベースマージ
+      if (remote.spanEvents?.length) {
         const localIds = new Set(spanEvents.map(s => s.id));
-        remote.spanEvents.forEach(s => {
-          if (!localIds.has(s.id)) spanEvents.push(s);
-        });
+        remote.spanEvents.forEach(s => { if (!localIds.has(s.id)) spanEvents.push(s); });
       }
 
-      // allEvents：月ごと・日ごとにマージ（ローカル優先）
+      // ④ allEvents：メンバー単位でマージ（日付単位ではなく）
       if (remote.allEvents) {
         Object.entries(remote.allEvents).forEach(([monthKey, days]) => {
           if (!allEvents[monthKey]) allEvents[monthKey] = {};
-          Object.entries(days).forEach(([day, dayData]) => {
+          Object.entries(days).forEach(([day, remoteDay]) => {
             if (!allEvents[monthKey][day]) {
-              allEvents[monthKey][day] = dayData;
+              // この日がローカルにない → リモートをそのまま使う
+              allEvents[monthKey][day] = remoteDay;
+            } else {
+              // この日がローカルにある → メンバーキーごとにマージ
+              Object.entries(remoteDay).forEach(([key, val]) => {
+                if (!(key in allEvents[monthKey][day])) {
+                  // リモートにあってローカルにないキー（他の人の入力）を追加
+                  allEvents[monthKey][day][key] = val;
+                }
+              });
             }
-            // すでにローカルにある日はローカル優先（触らない）
           });
         });
       }
 
-      // ローカルストレージも更新
+      // ローカルストレージ更新
       localStorage.setItem('cal_recurs', JSON.stringify(recurEvents));
       localStorage.setItem('cal_spans',  JSON.stringify(spanEvents));
       localStorage.setItem('cal_events', JSON.stringify(allEvents));
     }
 
-    // ③ マージ済みデータをGASに送信
-    const body = JSON.stringify({ action: 'save_all', members, allEvents, recurEvents, spanEvents });
-    const res = await fetch(gasUrl, { method:'POST', redirect:'follow', headers:{'Content-Type':'text/plain'}, body });
-    const json = await res.json();
-    setSyncStatus(json.status === 'ok' ? 'ok' : 'error');
+    // ⑤ マージ済みデータをGASに送信（リトライ付き）
+    let saved = false;
+    for (let attempt = 0; attempt < 2 && !saved; attempt++) {
+      try {
+        const body = JSON.stringify({ action: 'save_all', members, allEvents, recurEvents, spanEvents });
+        const res  = await fetch(gasUrl, { method:'POST', redirect:'follow', headers:{'Content-Type':'text/plain'}, body });
+        const json = await res.json();
+        if (json.status === 'ok') saved = true;
+      } catch(e) {
+        if (attempt === 0) await new Promise(r => setTimeout(r, 1500)); // 1.5秒待ってリトライ
+      }
+    }
 
-    // ④ カレンダーを再描画（マージ結果を反映）
+    setSyncStatus(saved ? 'ok' : 'error');
+    if (!saved) throw new Error('save failed');
+
     renderLegend();
     renderCalendar();
 
-  } catch(e) { setSyncStatus('error'); }
+  } catch(e) {
+    setSyncStatus('error');
+    // ロールバック：送信失敗時はスナップショットを復元
+    // （ただしマージ済みのローカルデータは保持）
+  } finally {
+    _syncLock = false;
+    // 保留中の同期があれば実行
+    if (_syncPending) {
+      _syncPending = false;
+      setTimeout(syncToGAS, 500);
+    }
+  }
 }
 
 async function loadFromGAS() {
