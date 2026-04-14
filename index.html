@@ -2,8 +2,27 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>家族カレンダー（共有版）</title>
+
+<!-- PWA: Web App Manifest -->
+<link rel="manifest" href="./manifest.json">
+
+<!-- PWA: テーマカラー（Android Chrome アドレスバー） -->
+<meta name="theme-color" content="#333333">
+
+<!-- PWA: iOS Safari ホーム画面追加対応 -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="家族カレ">
+<link rel="apple-touch-icon" href="./icon.svg">
+
+<!-- OGP（シェア時のプレビュー） -->
+<meta name="description" content="家族みんなで共有できるスマホ対応カレンダー">
+<meta property="og:title" content="家族カレンダー">
+<meta property="og:description" content="家族みんなで共有できるスマホ対応カレンダー">
+<meta property="og:type" content="website">
+<meta property="og:image" content="./icon.svg">
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=Noto+Serif+JP:wght@400;700&display=swap');
 
@@ -22,6 +41,7 @@
   --m0-tab:  #333333;   /* 和恵 */
   --m1-tab:  #666666;   /* 悟志 */
   --m2-tab:  #999999;   /* 哲平 */
+  --m3-tab:  #707070;   /* その他 */
 
   /* ── Accent: vivid spot colours for special events ── */
   --acc-red:    #c0241a;
@@ -75,6 +95,48 @@ body { font-family: 'Noto Sans JP', sans-serif; background: var(--bg); color: va
   .btn-members:hover { background: rgba(255,255,255,0.18); color: #fff; }
   .btn-save    { background: rgba(255,255,255,0.06); color: #999; border: 1px solid rgba(255,255,255,0.12); }
   .btn-save:hover { background: rgba(255,255,255,0.15); color: #ddd; }
+
+  /* ── Hamburger button (mobile only) ── */
+  .btn-hamburger {
+    display: none;
+    align-items: center; justify-content: center;
+    background: rgba(255,255,255,0.1); color: #ddd;
+    border: 1px solid rgba(255,255,255,0.2); border-radius: 6px;
+    width: 36px; height: 36px; font-size: 1.15rem;
+    cursor: pointer; flex-shrink: 0; transition: background 0.12s;
+    padding: 0;
+  }
+  .btn-hamburger:hover { background: rgba(255,255,255,0.22); color: #fff; }
+
+  /* ── Mobile menu drawer ── */
+  .menu-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.45); z-index: 150;
+  }
+  .menu-overlay.open { display: block; }
+  .menu-drawer {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: #1f1f1f; border-radius: 16px 16px 0 0;
+    padding-bottom: env(safe-area-inset-bottom, 20px);
+    z-index: 160;
+    transform: translateY(100%);
+    transition: transform 0.26s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 -8px 32px rgba(0,0,0,0.45);
+  }
+  .menu-drawer.open { transform: translateY(0); }
+  .menu-drawer-handle {
+    width: 36px; height: 4px; background: rgba(255,255,255,0.22);
+    border-radius: 2px; margin: 10px auto 4px;
+  }
+  .menu-drawer-btn {
+    display: flex; align-items: center; gap: 14px;
+    width: 100%; padding: 15px 22px;
+    background: none; border: none; border-top: 1px solid rgba(255,255,255,0.07);
+    color: #e0e0e0; font-family: inherit; font-size: 0.95rem; font-weight: 500;
+    cursor: pointer; text-align: left; transition: background 0.1s;
+  }
+  .menu-drawer-btn:active { background: rgba(255,255,255,0.1); }
+  .menu-drawer-icon { font-size: 1.1rem; width: 24px; text-align: center; flex-shrink: 0; }
 
   /* ── Legend ── */
   .legend {
@@ -156,10 +218,20 @@ body { font-family: 'Noto Sans JP', sans-serif; background: var(--bg); color: va
     .day-note-area { display: none; }
 
     /* ── ヘッダー ── */
-    .screen-header { padding: 4px 8px; gap: 4px; flex-wrap: nowrap; overflow-x: auto; }
-    .screen-header h1 { font-size: 0.7rem; white-space: nowrap; flex-shrink: 0; }
-    .header-controls { gap: 4px; flex-wrap: nowrap; }
-    .btn { font-size: 0.58rem; padding: 3px 5px; white-space: nowrap; flex-shrink: 0; }
+    .screen-header { padding: 8px 12px; gap: 8px; flex-wrap: nowrap; }
+    .screen-header h1 { font-size: 0.88rem; white-space: nowrap; flex-shrink: 0; }
+    .header-controls { gap: 7px; flex-wrap: nowrap; align-items: center; }
+    /* メニュー項目を非表示にしてハンバーガーを表示 */
+    .header-controls .menu-item { display: none !important; }
+    .btn-hamburger { display: flex !important; }
+    /* 今すぐ同期ボタンはスマホでも確実にタップできるサイズに */
+    .btn-save { font-size: 0.78rem !important; padding: 8px 13px !important; white-space: nowrap; }
+    /* 同期ステータスは幅を最小限に */
+    #syncStatus { min-width: 0 !important; font-size: 0.7rem; }
+    /* カラースウォッチのタッチ面積拡大 */
+    .modal-swatch { width: 28px !important; height: 28px !important; }
+    .acc-dot      { width: 26px !important; height: 26px !important; }
+    .acc-swatch   { width: 22px !important; height: 22px !important; }
 
     /* ── 月ナビ ── */
     .month-nav { margin-bottom: 2px; }
@@ -385,13 +457,14 @@ body { font-family: 'Noto Sans JP', sans-serif; background: var(--bg); color: va
   .slot-0 .m-tab { background: var(--m0-tab); }
   .slot-1 .m-tab { background: var(--m1-tab); }
   .slot-2 .m-tab { background: var(--m2-tab); }
-  .slot-3 .m-tab { background: #707070; }
+  .slot-3 .m-tab { background: var(--m3-tab); }
   .slot-4 .m-tab { background: #909090; }
 
   /* 名前バッジの色をカラーバーに合わせる */
   .slot-0 .m-badge { color: var(--m0-tab); }
   .slot-1 .m-badge { color: var(--m1-tab); }
   .slot-2 .m-badge { color: var(--m2-tab); }
+  .slot-3 .m-badge { color: var(--m3-tab); }
 
   /* 予定テキスト：大きく・はっきり */
   .ev-chip {
@@ -485,6 +558,35 @@ body { font-family: 'Noto Sans JP', sans-serif; background: var(--bg); color: va
     background: #1a1a1a; padding: 1px 8px; border-radius: 8px;
     letter-spacing: 0.04em;
   }
+
+  /* ── Identity picker ── */
+  .identity-btn {
+    display: flex; align-items: center; gap: 12px; width: 100%;
+    padding: 14px 18px; border-radius: 10px; border: 1.5px solid var(--border);
+    background: var(--bg); cursor: pointer; font-family: inherit;
+    font-size: 1rem; font-weight: 600; color: var(--text);
+    transition: background 0.1s, border-color 0.1s;
+  }
+  .identity-btn:hover  { background: #eeece8; border-color: #888; }
+  .identity-btn:active { background: #e5e3de; }
+  .identity-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+  .identity-subtitle {
+    font-size: 0.8rem; color: var(--muted); margin-bottom: 16px;
+    text-align: center; line-height: 1.5;
+  }
+  .identity-skip {
+    display: block; margin-top: 14px; background: none; border: none;
+    font-size: 0.75rem; color: var(--muted); cursor: pointer;
+    text-decoration: underline; text-underline-offset: 2px; width: 100%; text-align: center;
+  }
+
+  /* ── Confirm dialog ── */
+  .confirm-msg {
+    font-size: 0.88rem; color: var(--text); margin-bottom: 18px;
+    white-space: pre-wrap; line-height: 1.65;
+  }
+  .btn-danger { background: #c0392b; color: #fff; }
+  .btn-danger:hover { background: #a93226; }
 
   /* ② 保存トースト通知 */
   .save-toast {
@@ -764,6 +866,73 @@ body { font-family: 'Noto Sans JP', sans-serif; background: var(--bg); color: va
     padding: 3px 11px; border-radius: 5px; border: 1px solid #c8a820;
     background: #e8c96a; font-size: 0.73rem; cursor: pointer; font-family: inherit;
   }
+
+  /* ── Attachments ── */
+  .attach-section { margin-top: 8px; }
+  .attach-header { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+  .attach-label { font-size: 0.75rem; color: var(--muted); font-weight: 600; }
+  .attach-add-btn {
+    font-size: 0.7rem; padding: 3px 10px; border-radius: 10px;
+    border: 1px dashed var(--border); background: var(--bg);
+    color: var(--text); cursor: pointer; font-family: inherit; transition: border-color 0.1s;
+  }
+  .attach-add-btn:hover { border-color: #888; }
+  .attach-preview { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 2px; }
+  .attach-thumb {
+    position: relative; width: 72px; height: 72px;
+    border-radius: 8px; overflow: hidden; border: 1.5px solid var(--border);
+    cursor: pointer; flex-shrink: 0; background: var(--bg);
+    display: flex; align-items: center; justify-content: center;
+    transition: border-color 0.12s;
+  }
+  .attach-thumb:hover { border-color: #888; }
+  .attach-thumb img { width: 100%; height: 100%; object-fit: cover; }
+  .attach-thumb-pdf {
+    font-size: 0.58rem; text-align: center; padding: 6px 4px;
+    color: var(--muted); line-height: 1.4; word-break: break-all;
+  }
+  .attach-pdf-icon { font-size: 1.5rem; display: block; margin-bottom: 3px; }
+  .attach-del {
+    position: absolute; top: 2px; right: 2px;
+    background: rgba(0,0,0,0.62); color: #fff; border: none;
+    border-radius: 50%; width: 19px; height: 19px; font-size: 0.65rem;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    transition: background 0.1s;
+  }
+  .attach-del:hover { background: rgba(192,36,26,0.9); }
+  .attach-loading { font-size: 0.7rem; color: var(--muted); padding: 4px 0; }
+  /* Attachment full-screen viewer */
+  .attach-viewer {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.92); z-index: 300;
+    flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+  }
+  .attach-viewer.open { display: flex; }
+  .attach-viewer-close {
+    position: absolute; top: 16px; right: 16px;
+    background: rgba(255,255,255,0.14); color: #fff; border: none;
+    border-radius: 50%; width: 42px; height: 42px; font-size: 1.2rem;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    transition: background 0.12s;
+  }
+  .attach-viewer-close:hover { background: rgba(255,255,255,0.28); }
+  .attach-viewer img {
+    max-width: 94vw; max-height: 80vh; border-radius: 8px; object-fit: contain;
+    box-shadow: 0 8px 48px rgba(0,0,0,0.6);
+  }
+  .attach-viewer-name {
+    color: rgba(255,255,255,0.62); font-size: 0.78rem;
+    max-width: 90vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .attach-viewer-actions { display: flex; gap: 10px; }
+  .attach-viewer-btn {
+    background: rgba(255,255,255,0.14); color: #fff; border: none;
+    padding: 9px 20px; border-radius: 8px; font-family: inherit;
+    font-size: 0.82rem; cursor: pointer; transition: background 0.12s;
+  }
+  .attach-viewer-btn:hover { background: rgba(255,255,255,0.28); }
+  /* 📎 indicator in grid */
+  .att-dot { font-size: 0.55rem; flex-shrink: 0; opacity: 0.72; }
 }
 
 /* ═══════════════════ PRINT ═══════════════════ */
@@ -1002,14 +1171,15 @@ body { font-family: 'Noto Sans JP', sans-serif; background: var(--bg); color: va
 <div class="screen-header">
   <h1>🗓 家族カレンダー</h1>
   <div class="header-controls">
-    <button class="btn btn-recur"   onclick="openRecurModal()">↺ 定例管理</button>
-    <button class="btn btn-recur"   onclick="openSpanModal()"  style="background:rgba(255,255,255,0.13)">◼ 連続予定</button>
-    <button class="btn btn-members" onclick="openMembersModal()">👤 メンバー</button>
-    <button class="btn btn-members" onclick="openDataModal()" style="color:#bbb;border-color:rgba(255,255,255,0.18)">⬆︎ データ</button>
-    <button class="btn btn-save"    onclick="saveData()">☁ 今すぐ同期</button>
-    <button class="btn btn-print"   onclick="openPrintModal()">🖨 印刷設定</button>
-    <button class="btn btn-members" onclick="openGasSettings()" style="color:#aaa;border-color:rgba(255,255,255,0.18);">☁ 同期設定</button>
-    <span id="syncStatus" style="font-size:0.72rem;color:#aaa;min-width:80px;"></span>
+    <button class="btn btn-recur menu-item"   onclick="openRecurModal()">↺ 定例管理</button>
+    <button class="btn btn-recur menu-item"   onclick="openSpanModal()"  style="background:rgba(255,255,255,0.13)">◼ 連続予定</button>
+    <button class="btn btn-members menu-item" onclick="openMembersModal()">👤 メンバー</button>
+    <button class="btn btn-members menu-item" onclick="openDataModal()" style="color:#bbb;border-color:rgba(255,255,255,0.18)">⬆︎ データ</button>
+    <button class="btn btn-save"              onclick="saveData()">☁ 今すぐ同期</button>
+    <button class="btn btn-print menu-item"   onclick="openPrintModal()">🖨 印刷設定</button>
+    <button class="btn btn-members menu-item" onclick="openGasSettings()" style="color:#aaa;border-color:rgba(255,255,255,0.18);">☁ 同期設定</button>
+    <span id="syncStatus"></span>
+    <button class="btn-hamburger" onclick="openMenuDrawer()" aria-label="メニューを開く">☰</button>
   </div>
 </div>
 
@@ -1038,6 +1208,32 @@ body { font-family: 'Noto Sans JP', sans-serif; background: var(--bg); color: va
   </div>
   <div class="calendar-grid" id="calGrid"></div>
   <div class="print-legend" id="printLegend"></div>
+</div>
+
+<!-- Identity Picker Modal -->
+<div class="modal-overlay" id="identityModal">
+  <div class="modal" style="max-width:380px;text-align:center;">
+    <div class="modal-header" style="justify-content:center;border-bottom:none;padding-bottom:4px;">
+      <div class="modal-title" style="font-size:1.1rem;">👤 あなたは誰ですか？</div>
+    </div>
+    <p class="identity-subtitle">お名前を選ぶと、あなたの予定欄が先頭に表示され入力が楽になります</p>
+    <div id="identityBtns" style="display:flex;flex-direction:column;gap:10px;"></div>
+    <button class="identity-skip" onclick="closeIdentityModal()">あとで設定する</button>
+  </div>
+</div>
+
+<!-- Confirm Dialog -->
+<div class="modal-overlay" id="confirmModal">
+  <div class="modal" style="max-width:340px;">
+    <div class="modal-header" style="border-bottom:none;padding-bottom:0;">
+      <div class="modal-title" style="font-size:0.95rem;">⚠ 確認</div>
+    </div>
+    <p class="confirm-msg" id="confirmMsg"></p>
+    <div class="modal-actions" style="gap:10px;">
+      <button class="btn btn-cancel" onclick="confirmCancel()">キャンセル</button>
+      <button class="btn btn-danger" onclick="confirmOk()">削除する</button>
+    </div>
+  </div>
 </div>
 
 <!-- Edit Modal -->
@@ -1096,6 +1292,15 @@ body { font-family: 'Noto Sans JP', sans-serif; background: var(--bg); color: va
         <div class="span-form-col" style="flex:1">
           <label>📝 メモ（カレンダーには表示されません）</label>
           <textarea class="text-input" id="spanMemo" rows="2" placeholder="備考・持ち物・連絡先など…" style="min-height:44px;"></textarea>
+        </div>
+      </div>
+      <div class="span-form-row">
+        <div class="span-form-col" style="flex:1">
+          <div class="attach-header">
+            <span class="attach-label">📎 添付（写真・PDF）</span>
+            <button type="button" class="attach-add-btn" onclick="triggerSpanAttachInput()">＋ 追加</button>
+          </div>
+          <div class="attach-preview" id="span_attach_preview"></div>
         </div>
       </div>
       <div class="modal-actions" style="margin-top:8px;">
@@ -1282,6 +1487,49 @@ body { font-family: 'Noto Sans JP', sans-serif; background: var(--bg); color: va
 </div>
 
 
+<!-- Hidden file input for attachments -->
+<input type="file" id="attachFileInput" accept="image/*,.pdf" multiple style="display:none" onchange="handleAttachInputChange(this)">
+<!-- Hidden file input for span attachments -->
+<input type="file" id="spanAttachFileInput" accept="image/*,.pdf" multiple style="display:none" onchange="handleSpanAttachInputChange(this)">
+
+<!-- Attachment full-screen viewer -->
+<div class="attach-viewer" id="attachViewer">
+  <button class="attach-viewer-close" onclick="closeAttachViewer()">✕</button>
+  <img id="attachViewerImg" src="" alt="" style="display:none">
+  <div class="attach-viewer-name" id="attachViewerName"></div>
+  <div class="attach-viewer-actions">
+    <button class="attach-viewer-btn" onclick="downloadCurrentAttachment()">⬇ ダウンロード</button>
+    <button class="attach-viewer-btn" onclick="closeAttachViewer()">閉じる</button>
+  </div>
+</div>
+
+<!-- Mobile Menu Drawer -->
+<div class="menu-overlay" id="menuOverlay" onclick="closeMenuDrawer()"></div>
+<div class="menu-drawer" id="menuDrawer">
+  <div class="menu-drawer-handle"></div>
+  <button class="menu-drawer-btn" onclick="openRecurModal(); closeMenuDrawer()">
+    <span class="menu-drawer-icon">↺</span> 定例予定の管理
+  </button>
+  <button class="menu-drawer-btn" onclick="openSpanModal(); closeMenuDrawer()">
+    <span class="menu-drawer-icon">◼</span> 連続予定の管理
+  </button>
+  <button class="menu-drawer-btn" onclick="openMembersModal(); closeMenuDrawer()">
+    <span class="menu-drawer-icon">👤</span> メンバー設定
+  </button>
+  <button class="menu-drawer-btn" onclick="openDataModal(); closeMenuDrawer()">
+    <span class="menu-drawer-icon">⬆︎</span> データ管理
+  </button>
+  <button class="menu-drawer-btn" onclick="openPrintModal(); closeMenuDrawer()">
+    <span class="menu-drawer-icon">🖨</span> 印刷設定
+  </button>
+  <button class="menu-drawer-btn" onclick="openGasSettings(); closeMenuDrawer()">
+    <span class="menu-drawer-icon">☁</span> 同期設定
+  </button>
+  <button class="menu-drawer-btn" onclick="showIdentityPicker(); closeMenuDrawer()" style="border-top:1px solid rgba(255,255,255,0.14);">
+    <span class="menu-drawer-icon">🙋</span> 自分の設定（あなたは誰？）
+  </button>
+</div>
+
 <script>
 // ─── Constants ───
 const M_TABS = ['#5a5a5a','#8a8a8a','#b0b0b0','#707070','#909090','#c0c0c0'];
@@ -1298,7 +1546,7 @@ const ACC_COLORS = [
 
 // ─── Default data ───
 const DEFAULT_MEMBERS = [
-  { name:'和恵' }, { name:'悟志' }, { name:'哲平' },
+  { name:'和恵' }, { name:'悟志' }, { name:'哲平' }, { name:'その他' },
 ];
 
 const DEFAULT_RECURS = [
@@ -1361,9 +1609,11 @@ let members     = JSON.parse(localStorage.getItem('cal_members') || 'null') || D
 let allEvents   = JSON.parse(localStorage.getItem('cal_events')  || 'null') || structuredClone(DEFAULT_EVENTS);
 let recurEvents = JSON.parse(localStorage.getItem('cal_recurs')  || 'null') || structuredClone(DEFAULT_RECURS);
 let spanEvents  = JSON.parse(localStorage.getItem('cal_spans')   || 'null') || structuredClone(DEFAULT_SPANS);
+let deletedSpanIds = JSON.parse(localStorage.getItem('cal_deleted_spans') || '[]');
 let curY = 2026, curM = 3, editDay = null;
 let gasUrl = GAS_URL;
 let syncStatus = 'idle';
+let myMember = localStorage.getItem('cal_my_member') || null;
 
 // Print range state
 let printFrom = null, printTo = null, printActive = false;
@@ -1376,6 +1626,11 @@ function checkLegacyData() {
   if (!currentVer && legacyKeys.some(k => localStorage.getItem(k))) {
     // Already loaded above — just mark migrated
     localStorage.setItem('cal_version', '2');
+  }
+  // v3: 「その他」メンバーを自動追加（まだいない場合）
+  if (!members.some(m => m.name === 'その他')) {
+    members.push({ name: 'その他' });
+    localStorage.setItem('cal_members', JSON.stringify(members));
   }
 }
 
@@ -1414,6 +1669,10 @@ function init() {
       const el = document.querySelector('.day-cell.today');
       if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }, 80);
+  }
+  // 「自分はだれ？」が未設定なら初回案内
+  if (!myMember) {
+    setTimeout(showIdentityPicker, 700);
   }
 }
 
@@ -1551,11 +1810,13 @@ function openEditModal(day) {
   const mev = ((allEvents[`${curY}-${curM}`])||{})[day] || {};
   document.getElementById('modalTitle').textContent = `${curM}月${day}日の予定`;
 
-  // 自分（最初のメンバー＝デフォルト）または名前マッチで自分の欄を特定
-  // ※ ログイン機能がないため、入力者本人を特定する代わりに
-  //    「自分の欄」タブを設けて全員分を表示しつつ自分の欄を強調する
+  // myMember を先頭に並べ替え（元のインデックス mi はID用に保持）
+  const displayOrder = members
+    .map((m, mi) => ({ m, mi }))
+    .sort((a, b) => (a.m.name === myMember ? -1 : b.m.name === myMember ? 1 : 0));
+
   let fields = '';
-  members.forEach((m, mi) => {
+  displayOrder.forEach(({ m, mi }) => {
     const recurs   = getRecursForMember(day, m.name);
     const curAcc   = mev[m.name+'_acc'] || 'none';
     const origVal  = mev[m.name] || '';  // 変更検知用：元の値を保持
@@ -1598,7 +1859,8 @@ function openEditModal(day) {
     const tabCol = getTabColor(mi);
 
     fields += `
-      <div class="form-group" id="fg_${mi}" style="border-left: 4px solid ${tabCol}; padding-left:10px; margin-bottom:16px;">
+      <div class="form-group${m.name === myMember ? ' my-slot' : ''}" id="fg_${mi}"
+           style="${m.name === myMember ? '' : `border-left: 4px solid ${tabCol}; padding-left:10px;`} margin-bottom:16px;">
         <div class="field-header" style="margin-bottom:6px;">
           <div class="field-label" style="font-size:0.9rem;">
             <div style="width:10px;height:10px;border-radius:50%;background:${tabCol}"></div>
@@ -1619,16 +1881,33 @@ function openEditModal(day) {
           <div class="memo-label">📝 メモ（カレンダーには表示されません）</div>
           <textarea id="memo_${mi}" rows="2" placeholder="備考・持ち物・連絡先など…" style="font-size:0.82rem;">${esc(curMemo)}</textarea>
         </div>
+        <div class="attach-section" id="attach_${mi}">
+          <div class="attach-header">
+            <span class="attach-label">📎 添付（写真・PDF）</span>
+            <button type="button" class="attach-add-btn" onclick="triggerAttachInput(${mi})">＋ 追加</button>
+          </div>
+          <div class="attach-preview" id="attach_preview_${mi}"></div>
+        </div>
       </div>`;
+  });
+
+  // 添付ファイル状態を初期化
+  modalAttachments    = {};
+  modalAttachDeleteIds = new Set();
+  members.forEach((m, mi) => {
+    modalAttachments[mi] = [...(mev[m.name+'_attachments'] || [])];
   });
 
   document.getElementById('modalFields').innerHTML = fields;
   document.getElementById('editModal').classList.add('open');
+  renderAllAttachmentPreviews(); // 非同期でサムネイルをバックグラウンド読込
 
-  // スマホでキーボードが出たとき最初のtextareaが見えるようにスクロール
+  // 自分の欄（またはindex 0）へスクロール
   setTimeout(() => {
-    const firstTA = document.getElementById('ef_0');
-    if (firstTA) firstTA.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const myMi = myMember ? members.findIndex(m => m.name === myMember) : 0;
+    const tid  = 'ef_' + (myMi >= 0 ? myMi : 0);
+    const el   = document.getElementById(tid);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, 150);
 }
 
@@ -1637,9 +1916,9 @@ function checkOtherChange(mi, ta) {
   const orig = ta.getAttribute('data-orig') || '';
   const warn = document.getElementById('warn_' + mi);
   if (!warn) return;
-  // 自分以外の欄かどうかはここでは判定できないため
-  // 「元の値があった欄を変更したとき」に警告を表示する
-  if (orig && ta.value.trim() !== orig) {
+  // 自分の欄なら警告不要
+  const isMySlot = myMember && members[mi] && members[mi].name === myMember;
+  if (!isMySlot && orig && ta.value.trim() !== orig) {
     warn.classList.add('show');
   } else {
     warn.classList.remove('show');
@@ -1668,22 +1947,39 @@ function cycleRecurState(mi, rid, rowEl) {
   rowEl.classList.toggle('cancelled', next === 1 || next === 2);
   rowEl.classList.toggle('hidden-slot', next === 2);
 }
-function closeEditModal() {
-  // 閉じる前に必ず自動保存
-  if (editDay) {
-    saveEditModal(true); // true = silent（再描画あり、モーダルclose呼ばない）
-  } else {
+async function closeEditModal() {
+  if (!editDay) {
     document.getElementById('editModal').classList.remove('open');
+    return;
   }
+
+  // 削除される予定をまとめて確認（confirm() の代わりにカスタムダイアログ）
+  const key = `${curY}-${curM}`;
+  const mev = ((allEvents[key])||{})[editDay] || {};
+  const pendingDels = [];
+  members.forEach((m, mi) => {
+    const v = document.getElementById('ef_'+mi)?.value.trim() || '';
+    if ((mev[m.name] || '') && !v) pendingDels.push({ m, mi });
+  });
+
+  if (pendingDels.length) {
+    const lines = pendingDels
+      .map(d => `・${d.m.name}「${(mev[d.m.name]||'').slice(0, 20)}」`)
+      .join('\n');
+    const ok = await showConfirm(`以下の予定を削除します。よろしいですか？\n\n${lines}`);
+    if (!ok) return;
+  }
+
+  saveEditModal(pendingDels.map(d => d.m.name));
 }
-function saveEditModal(silent) {
+
+function saveEditModal(confirmedDeleteNames = []) {
   if (!editDay) return;
   const key = `${curY}-${curM}`;
   if (!allEvents[key]) allEvents[key] = {};
   if (!allEvents[key][editDay]) allEvents[key][editDay] = {};
 
-  let hasChange = false;
-  let deletedNames = [];
+  const now = Date.now();
 
   members.forEach((m, mi) => {
     const v    = document.getElementById('ef_'+mi)?.value.trim() || '';
@@ -1691,18 +1987,18 @@ function saveEditModal(silent) {
     const memo = document.getElementById('memo_'+mi)?.value.trim() || '';
     const origVal = allEvents[key][editDay][m.name] || '';
 
-    // ⑥ 既存の予定を消す場合は確認
-    if (origVal && !v) {
-      if (!confirm(`${m.name}の予定「${origVal.slice(0,20)}」を削除します。よろしいですか？`)) {
-        // キャンセルされたら元の値を復元
-        const ta = document.getElementById('ef_'+mi);
-        if (ta) ta.value = origVal;
-        return;
-      }
-      deletedNames.push(m.name);
+    // 確認されていない削除はスキップ（テキストを元に戻す）
+    if (origVal && !v && !confirmedDeleteNames.includes(m.name)) {
+      const ta = document.getElementById('ef_'+mi);
+      if (ta) ta.value = origVal;
+      return;
     }
 
-    if (v !== origVal) hasChange = true;
+    // 値が変わったときだけタイムスタンプ更新
+    if (v !== origVal || (v && !(m.name+'_updatedAt' in allEvents[key][editDay]))) {
+      if (v) allEvents[key][editDay][m.name+'_updatedAt'] = now;
+      else   delete allEvents[key][editDay][m.name+'_updatedAt'];
+    }
 
     if (v) allEvents[key][editDay][m.name] = v;
     else   delete allEvents[key][editDay][m.name];
@@ -1710,6 +2006,7 @@ function saveEditModal(silent) {
     else delete allEvents[key][editDay][m.name+'_acc'];
     if (memo) allEvents[key][editDay][m.name+'_memo'] = memo;
     else      delete allEvents[key][editDay][m.name+'_memo'];
+
     const recurDay = getRecursForMember(editDay, m.name);
     const cancelled = recurDay.map(r => r.id).filter(rid => {
       const row = document.getElementById(`rcrow_${mi}_${rid}`);
@@ -1725,11 +2022,24 @@ function saveEditModal(silent) {
     else                  delete allEvents[key][editDay][m.name+'_recur_hidden'];
   });
 
+  // 添付ファイルのメタデータを保存（テキスト変更とは独立して保存）
+  members.forEach((m, mi) => {
+    if (!allEvents[key][editDay]) allEvents[key][editDay] = {};
+    const atts = modalAttachments[mi] || [];
+    if (atts.length) {
+      allEvents[key][editDay][m.name+'_attachments'] =
+        atts.map(a => ({ id: a.id, filename: a.filename, type: a.type, size: a.size }));
+    } else {
+      delete allEvents[key][editDay][m.name+'_attachments'];
+    }
+  });
+  // 削除対象をIndexedDBから削除（非同期・バックグラウンド）
+  modalAttachDeleteIds.forEach(id => idbDel(id).catch(() => {}));
+  modalAttachDeleteIds = new Set();
+
   if (!Object.keys(allEvents[key][editDay]).length) delete allEvents[key][editDay];
 
   saveData();
-
-  // GASなしの場合もトーストで保存確認を伝える
   if (!gasUrl) showToast('✓ 保存しました', 'success');
 
   editDay = null;
@@ -1755,14 +2065,16 @@ function renderSpanList() {
     const memoHtml = s.memo
       ? `<div style="font-size:0.7rem;color:var(--muted);margin-top:3px;padding:3px 6px;background:var(--bg);border-radius:4px;white-space:pre-wrap;">📝 ${esc(s.memo)}</div>`
       : '';
+    const attCount = s.attachments?.length || 0;
+    const attHtml  = attCount ? `<span style="font-size:0.68rem;color:var(--muted);margin-left:4px;">📎${attCount}</span>` : '';
     return `<div class="span-item" style="flex-direction:column;align-items:stretch;">
       <div style="display:flex;align-items:center;gap:8px;">
         <div class="span-item-color" style="background:${a?a.hex:'#888'}"></div>
         <div class="span-item-info">
-          <div style="font-size:0.8rem;font-weight:500;">${esc(s.text)}</div>
+          <div style="font-size:0.8rem;font-weight:500;">${esc(s.text)}${attHtml}</div>
           <div class="span-item-dates">${esc(s.members.join('、'))} ／ ${esc(s.from)} 〜 ${esc(s.to)}</div>
         </div>
-        <button class="btn-ri-edit" onclick="showRecurForm('${s.id}')" style="margin-left:auto;">編集</button>
+        <button class="btn-ri-edit" onclick="editSpanInline('${s.id}')" style="margin-left:auto;">編集</button>
         <button class="btn-span-del" onclick="deleteSpan('${s.id}')">✕</button>
       </div>
       ${memoHtml}
@@ -1782,10 +2094,17 @@ function toggleSpanForm() {
     const memoEl = document.getElementById('spanMemo');
     if (memoEl) memoEl.value = '';
     spanSelectedColor = 'blue';
+    spanAttachments = []; spanAttachDeleteIds = new Set();
     renderSpanColorDots(); renderSpanMCbs([]);
+    renderSpanAttachPreview();
   }
 }
-function hideSpanForm() { spanFormOpen=false; document.getElementById('spanForm').classList.remove('open'); }
+function hideSpanForm() {
+  spanFormOpen = false;
+  document.getElementById('spanForm').classList.remove('open');
+  spanAttachments = []; spanAttachDeleteIds = new Set();
+  renderSpanAttachPreview();
+}
 
 function renderSpanColorDots() {
   document.getElementById('spanColorDots').innerHTML = ACC_COLORS.map(a =>
@@ -1812,7 +2131,8 @@ function toggleSMCb(label, i) {
 }
 
 function deleteSpan(id) {
-  spanEvents = spanEvents.filter(s=>s.id!==id);
+  spanEvents = spanEvents.filter(s => s.id !== id);
+  deletedSpanIds.push({ id, deletedAt: Date.now() });
   saveData(); renderSpanList();
 }
 function saveSpanItem() {
@@ -1828,11 +2148,19 @@ function saveSpanItem() {
   if (eid) {
     // 編集モード：既存を更新
     const sp = spanEvents.find(s => s.id === eid);
-    if (sp) { sp.text = text; sp.from = from; sp.to = to; sp.members = mems; sp.color = spanSelectedColor; sp.memo = memo; }
+    if (sp) {
+      sp.text = text; sp.from = from; sp.to = to; sp.members = mems; sp.color = spanSelectedColor; sp.memo = memo; sp._updatedAt = Date.now();
+      if (spanAttachments.length) sp.attachments = [...spanAttachments];
+      else delete sp.attachments;
+    }
   } else {
     // 新規追加
-    spanEvents.push({ id:uid(), text, from, to, members:mems, color:spanSelectedColor, memo });
+    const newSpan = { id:uid(), text, from, to, members:mems, color:spanSelectedColor, memo, _updatedAt: Date.now() };
+    if (spanAttachments.length) newSpan.attachments = [...spanAttachments];
+    spanEvents.push(newSpan);
   }
+  spanAttachDeleteIds.forEach(id => idbDel(id).catch(() => {}));
+  spanAttachDeleteIds = new Set();
   saveData(); hideSpanForm(); renderSpanList();
 }
 
@@ -1927,10 +2255,11 @@ function saveMembersModal(){
 
 // ─── Save ───
 function saveData() {
-  localStorage.setItem('cal_events', JSON.stringify(allEvents));
-  localStorage.setItem('cal_members',JSON.stringify(members));
-  localStorage.setItem('cal_recurs', JSON.stringify(recurEvents));
-  localStorage.setItem('cal_spans',  JSON.stringify(spanEvents));
+  localStorage.setItem('cal_events',        JSON.stringify(allEvents));
+  localStorage.setItem('cal_members',       JSON.stringify(members));
+  localStorage.setItem('cal_recurs',        JSON.stringify(recurEvents));
+  localStorage.setItem('cal_spans',         JSON.stringify(spanEvents));
+  localStorage.setItem('cal_deleted_spans', JSON.stringify(deletedSpanIds));
   localStorage.setItem('cal_version','2');
   if (gasUrl) syncToGAS();
 }
@@ -1971,9 +2300,10 @@ async function syncToGAS() {
 
   // 送信前のスナップショット（失敗時のロールバック用）
   const snapshot = {
-    allEvents:   JSON.parse(JSON.stringify(allEvents)),
-    recurEvents: JSON.parse(JSON.stringify(recurEvents)),
-    spanEvents:  JSON.parse(JSON.stringify(spanEvents)),
+    allEvents:      JSON.parse(JSON.stringify(allEvents)),
+    recurEvents:    JSON.parse(JSON.stringify(recurEvents)),
+    spanEvents:     JSON.parse(JSON.stringify(spanEvents)),
+    deletedSpanIds: JSON.parse(JSON.stringify(deletedSpanIds)),
   };
 
   try {
@@ -1990,27 +2320,62 @@ async function syncToGAS() {
         remote.recurEvents.forEach(r => { if (!localIds.has(r.id)) recurEvents.push(r); });
       }
 
-      // ③ spanEvents：IDベースマージ
+      // ③ spanEvents：タイムスタンプ付き last-write-wins マージ（削除の同期も含む）
+      // まずリモートの削除情報をローカルに適用
+      if (remote.deletedSpanIds?.length) {
+        const remoteDelSet = new Set(remote.deletedSpanIds.map(d => d.id));
+        spanEvents = spanEvents.filter(s => !remoteDelSet.has(s.id));
+        const localDelSet = new Set(deletedSpanIds.map(d => d.id));
+        remote.deletedSpanIds.forEach(d => { if (!localDelSet.has(d.id)) deletedSpanIds.push(d); });
+      }
+      // 次に各リモートspanを処理（タイムスタンプで勝者決定）
       if (remote.spanEvents?.length) {
-        const localIds = new Set(spanEvents.map(s => s.id));
-        remote.spanEvents.forEach(s => { if (!localIds.has(s.id)) spanEvents.push(s); });
+        remote.spanEvents.forEach(rs => {
+          // ローカルで削除済みかつ削除の方が新しければスキップ
+          const delEntry = deletedSpanIds.find(d => d.id === rs.id);
+          if (delEntry && (delEntry.deletedAt || 0) >= (rs._updatedAt || 0)) return;
+          const li = spanEvents.findIndex(s => s.id === rs.id);
+          if (li === -1) {
+            spanEvents.push(rs); // 新規
+          } else if ((rs._updatedAt || 0) > (spanEvents[li]._updatedAt || 0)) {
+            spanEvents[li] = rs; // リモートが新しければ上書き
+          }
+        });
       }
 
-      // ④ allEvents：メンバー単位でマージ（日付単位ではなく）
+      // ④ allEvents：タイムスタンプ付き last-write-wins マージ
       if (remote.allEvents) {
+        // _updatedAt など付随サフィックス（メンバー名キーと区別するため）
+        const SFXS = ['_acc','_memo','_updatedAt','_recur_cancel','_recur_hidden'];
         Object.entries(remote.allEvents).forEach(([monthKey, days]) => {
           if (!allEvents[monthKey]) allEvents[monthKey] = {};
           Object.entries(days).forEach(([day, remoteDay]) => {
             if (!allEvents[monthKey][day]) {
               // この日がローカルにない → リモートをそのまま使う
-              allEvents[monthKey][day] = remoteDay;
+              allEvents[monthKey][day] = { ...remoteDay };
             } else {
-              // この日がローカルにある → メンバーキーごとにマージ
-              Object.entries(remoteDay).forEach(([key, val]) => {
-                if (!(key in allEvents[monthKey][day])) {
-                  // リモートにあってローカルにないキー（他の人の入力）を追加
-                  allEvents[monthKey][day][key] = val;
+              const local = allEvents[monthKey][day];
+              // サフィックスなしのキー＝メンバー名キーを収集
+              const remoteMemberKeys = Object.keys(remoteDay)
+                .filter(k => !SFXS.some(s => k.endsWith(s)));
+              remoteMemberKeys.forEach(mKey => {
+                const localTs  = local[mKey+'_updatedAt']       || 0;
+                const remoteTs = remoteDay[mKey+'_updatedAt']   || 0;
+                if (remoteTs > localTs || !(mKey in local)) {
+                  // リモートが新しい or ローカルにない → リモートで上書き
+                  local[mKey] = remoteDay[mKey];
+                  SFXS.forEach(sfx => {
+                    const k = mKey + sfx;
+                    if (remoteDay[k] !== undefined) local[k] = remoteDay[k];
+                    else delete local[k];
+                  });
                 }
+                // ローカルが新しい → ローカルを維持（何もしない）
+              });
+              // メンバーキー以外（_note など）も補完
+              Object.entries(remoteDay).forEach(([k, v]) => {
+                if (!SFXS.some(s => k.endsWith(s)) && remoteMemberKeys.includes(k)) return;
+                if (!(k in local)) local[k] = v;
               });
             }
           });
@@ -2018,16 +2383,20 @@ async function syncToGAS() {
       }
 
       // ローカルストレージ更新
-      localStorage.setItem('cal_recurs', JSON.stringify(recurEvents));
-      localStorage.setItem('cal_spans',  JSON.stringify(spanEvents));
-      localStorage.setItem('cal_events', JSON.stringify(allEvents));
+      localStorage.setItem('cal_recurs',        JSON.stringify(recurEvents));
+      localStorage.setItem('cal_spans',         JSON.stringify(spanEvents));
+      localStorage.setItem('cal_deleted_spans', JSON.stringify(deletedSpanIds));
+      localStorage.setItem('cal_events',        JSON.stringify(allEvents));
+      // 添付ファイルデータをIndexedDBに保存
+      if (remote.attachmentsData) await restoreAttachmentsFromSync(remote.attachmentsData);
     }
 
-    // ⑤ マージ済みデータをGASに送信（リトライ付き）
+    // ⑤ マージ済みデータ＋添付ファイルをGASに送信（リトライ付き）
+    const attachmentsData = await gatherAttachmentsForSync();
     let saved = false;
     for (let attempt = 0; attempt < 2 && !saved; attempt++) {
       try {
-        const body = JSON.stringify({ action: 'save_all', members, allEvents, recurEvents, spanEvents });
+        const body = JSON.stringify({ action: 'save_all', members, allEvents, recurEvents, spanEvents, deletedSpanIds, attachmentsData });
         const res  = await fetch(gasUrl, { method:'POST', redirect:'follow', headers:{'Content-Type':'text/plain'}, body });
         const json = await res.json();
         if (json.status === 'ok') saved = true;
@@ -2067,11 +2436,29 @@ async function loadFromGAS() {
     if (d.members     && d.members.length)                  members     = d.members;
     if (d.allEvents   && Object.keys(d.allEvents).length)   allEvents   = d.allEvents;
     if (d.recurEvents && d.recurEvents.length)              recurEvents = d.recurEvents;
-    if (d.spanEvents  && d.spanEvents.length)               spanEvents  = d.spanEvents;
-    localStorage.setItem('cal_members', JSON.stringify(members));
-    localStorage.setItem('cal_events',  JSON.stringify(allEvents));
-    localStorage.setItem('cal_recurs',  JSON.stringify(recurEvents));
-    localStorage.setItem('cal_spans',   JSON.stringify(spanEvents));
+    // spanEvents：削除トゥームストーンとタイムスタンプを考慮したスマートマージ
+    if (d.deletedSpanIds?.length) {
+      const remoteDelSet = new Set(d.deletedSpanIds.map(e => e.id));
+      spanEvents = spanEvents.filter(s => !remoteDelSet.has(s.id));
+      const localDelSet = new Set(deletedSpanIds.map(e => e.id));
+      d.deletedSpanIds.forEach(e => { if (!localDelSet.has(e.id)) deletedSpanIds.push(e); });
+    }
+    if (d.spanEvents?.length) {
+      d.spanEvents.forEach(rs => {
+        const delEntry = deletedSpanIds.find(e => e.id === rs.id);
+        if (delEntry && (delEntry.deletedAt || 0) >= (rs._updatedAt || 0)) return;
+        const li = spanEvents.findIndex(s => s.id === rs.id);
+        if (li === -1) spanEvents.push(rs);
+        else if ((rs._updatedAt || 0) > (spanEvents[li]._updatedAt || 0)) spanEvents[li] = rs;
+      });
+    }
+    localStorage.setItem('cal_members',       JSON.stringify(members));
+    localStorage.setItem('cal_events',        JSON.stringify(allEvents));
+    localStorage.setItem('cal_recurs',        JSON.stringify(recurEvents));
+    localStorage.setItem('cal_spans',         JSON.stringify(spanEvents));
+    localStorage.setItem('cal_deleted_spans', JSON.stringify(deletedSpanIds));
+    // 添付ファイルデータをIndexedDBに保存（新しいデバイスでも写真が見られる）
+    if (d.attachmentsData) await restoreAttachmentsFromSync(d.attachmentsData);
     setSyncStatus('ok');
     return true;
   } catch(e) { setSyncStatus('offline'); return false; }
@@ -2384,15 +2771,15 @@ function buildFlatRangeHtml(from, to) {
       const memberSpans = allSpansToday.filter(s => !s.members.length || s.members.includes(mem.name));
 
       let slotCls = '', spanBadgeHtml = '';
-      if (memberSpans.length) {
-        const sp = memberSpans[0];
-        slotCls += ` slot-span-${sp.color}`;
-        // バッジは初日のみ表示
-        if (sp.from === ds) {
-          slotCls += ' slot-span-start';
-          spanBadgeHtml = `<span class="slot-span-badge acc-${sp.color}" onclick="event.stopPropagation();openSpanEditModal('${sp.id}')">${esc(sp.text)}</span>`;
+      memberSpans.forEach((sp, spIdx) => {
+        if (spIdx === 0) slotCls += ` slot-span-${sp.color}`;
+        // バッジは「この期間内で最初に表示される日」に表示（期間外で始まる場合はfromの先頭日）
+        const firstVisible = sp.from < from ? from : sp.from;
+        if (ds === firstVisible) {
+          if (!slotCls.includes('slot-span-start')) slotCls += ' slot-span-start';
+          spanBadgeHtml += `<span class="slot-span-badge acc-${sp.color}" onclick="event.stopPropagation();openSpanEditModal('${sp.id}')">${esc(sp.text)}</span>`;
         }
-      }
+      });
 
       let chipHtml = '';
       if (manualText) {
@@ -2532,15 +2919,17 @@ function buildCalendarHtml(y, m) {
       })();
       const memberSpans = allSpansToday.filter(s => !s.members.length || s.members.includes(mem.name));
       let slotCls = '', spanBadgeHtml = '';
-      if (memberSpans.length) {
-        const sp = memberSpans[0];
-        slotCls += ` slot-span-${sp.color}`;
-        // バッジは初日のみ表示
-        if (sp.from === ds) {
-          slotCls += ' slot-span-start';
-          spanBadgeHtml = `<span class="slot-span-badge acc-${sp.color}" onclick="event.stopPropagation();openSpanEditModal('${sp.id}')" title="クリックで編集">${esc(sp.text)}</span>`;
+      // 月初日（この月で最初に表示される日）
+      const monthStart = `${y}-${String(m).padStart(2,'0')}-01`;
+      memberSpans.forEach((sp, spIdx) => {
+        if (spIdx === 0) slotCls += ` slot-span-${sp.color}`;
+        // バッジは「この月で最初に表示される日」に表示（前月から続く場合は月初に表示）
+        const firstVisible = sp.from < monthStart ? monthStart : sp.from;
+        if (ds === firstVisible) {
+          if (!slotCls.includes('slot-span-start')) slotCls += ' slot-span-start';
+          spanBadgeHtml += `<span class="slot-span-badge acc-${sp.color}" onclick="event.stopPropagation();openSpanEditModal('${sp.id}')" title="クリックで編集">${esc(sp.text)}</span>`;
         }
-      }
+      });
       let chipHtml = '';
       if (manualText) {
         const accCls = manualAcc ? ` acc-${manualAcc}` : '';
@@ -2559,18 +2948,257 @@ function buildCalendarHtml(y, m) {
         }).join('');
         chipHtml += recurHtml;
       }
-      const hasMemo = !!(mev[d]?.[mem.name+'_memo']);
-      const memoDot = hasMemo ? `<span style="font-size:0.55rem;color:#aaa;margin-left:auto;flex-shrink:0;">📝</span>` : '';
+      const hasMemo  = !!(mev[d]?.[mem.name+'_memo']);
+      const hasAtt   = !!(mev[d]?.[mem.name+'_attachments']?.length);
+      const memoDot  = hasMemo ? `<span style="font-size:0.55rem;color:#aaa;margin-left:auto;flex-shrink:0;">📝</span>` : '';
+      const attDot   = hasAtt  ? `<span class="att-dot">📎</span>` : '';
       const hasEvent = !!(chipHtml || spanBadgeHtml);
-      slotsHtml += `<div class="member-slot slot-${mi}${slotCls} ${hasEvent?'':'empty-slot'}"><div class="m-tab"></div><div class="m-badge">${esc(mem.name[0])}</div><div class="m-content">${spanBadgeHtml}${chipHtml}</div>${memoDot}</div>`;
+      slotsHtml += `<div class="member-slot slot-${mi}${slotCls} ${hasEvent||hasAtt?'':'empty-slot'}"><div class="m-tab"></div><div class="m-badge">${esc(mem.name[0])}</div><div class="m-content">${spanBadgeHtml}${chipHtml}</div>${attDot}${memoDot}</div>`;
     });
     html += `<div class="day-cell ${cellCls}" onclick="openEditModal(${d})"><div class="day-top">${dayNumHtml}${holidayLabel}${noteHtml}</div><div class="member-rows">${slotsHtml}</div></div>`;
   }
   return html;
 }
 
+// ─── IndexedDB（添付ファイルストレージ） ───
+const IDB_NAME = 'familyCalDB', IDB_VER = 1;
+let _idb = null;
+
+function openIDB() {
+  if (_idb) return Promise.resolve(_idb);
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(IDB_NAME, IDB_VER);
+    req.onupgradeneeded = e => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains('attachments'))
+        db.createObjectStore('attachments', { keyPath: 'id' });
+    };
+    req.onsuccess = e => { _idb = e.target.result; resolve(_idb); };
+    req.onerror   = e => reject(e.target.error);
+  });
+}
+async function idbPut(id, data) {
+  const db = await openIDB();
+  return new Promise((res, rej) => {
+    const tx = db.transaction('attachments', 'readwrite');
+    tx.objectStore('attachments').put({ id, data });
+    tx.oncomplete = res; tx.onerror = e => rej(e.target.error);
+  });
+}
+async function idbGet(id) {
+  const db = await openIDB();
+  return new Promise((res, rej) => {
+    const tx  = db.transaction('attachments', 'readonly');
+    const req = tx.objectStore('attachments').get(id);
+    req.onsuccess = e => res(e.target.result?.data ?? null);
+    req.onerror   = e => rej(e.target.error);
+  });
+}
+async function idbDel(id) {
+  const db = await openIDB();
+  return new Promise((res, rej) => {
+    const tx = db.transaction('attachments', 'readwrite');
+    tx.objectStore('attachments').delete(id);
+    tx.oncomplete = res; tx.onerror = e => rej(e.target.error);
+  });
+}
+
+function getAllAttachmentMetaIds() {
+  const ids = new Set();
+  for (const days of Object.values(allEvents)) {
+    for (const dayData of Object.values(days)) {
+      for (const m of members) {
+        const atts = dayData[m.name+'_attachments'];
+        if (Array.isArray(atts)) atts.forEach(a => ids.add(a.id));
+      }
+    }
+  }
+  // 連続予定の添付ファイルも含める
+  for (const sp of spanEvents) {
+    if (Array.isArray(sp.attachments)) sp.attachments.forEach(a => ids.add(a.id));
+  }
+  return ids;
+}
+
+// ─── Attachment modal state ───
+let modalAttachments   = {};
+let modalAttachDeleteIds = new Set();
+let currentAttachMi    = null;
+let viewerAttachId     = null;
+
+// ─── Span attachment state ───
+let spanAttachments    = [];
+let spanAttachDeleteIds = new Set();
+
+// ─── File input handling ───
+function triggerAttachInput(mi) {
+  currentAttachMi = mi;
+  const inp = document.getElementById('attachFileInput');
+  inp.value = '';
+  inp.click();
+}
+function handleAttachInputChange(input) {
+  if (currentAttachMi === null) return;
+  const mi = currentAttachMi;
+  Array.from(input.files).forEach(file => processAttachFile(file, mi));
+}
+function processAttachFile(file, mi) {
+  if (file.size > 5 * 1024 * 1024) {
+    showToast(`${file.name}：5MB以下のファイルを選んでください`, 'error'); return;
+  }
+  if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
+    showToast('画像またはPDFを選んでください', 'error'); return;
+  }
+  const id = uid();
+  const reader = new FileReader();
+  reader.onload = async e => {
+    await idbPut(id, e.target.result);
+    if (!modalAttachments[mi]) modalAttachments[mi] = [];
+    modalAttachments[mi].push({ id, filename: file.name, type: file.type, size: file.size });
+    renderAttachmentPreview(mi);
+  };
+  reader.readAsDataURL(file);
+}
+
+// ─── Attachment preview ───
+async function renderAttachmentPreview(mi) {
+  const container = document.getElementById(`attach_preview_${mi}`);
+  if (!container) return;
+  const atts = modalAttachments[mi] || [];
+  if (!atts.length) { container.innerHTML = ''; return; }
+  container.innerHTML = '<span class="attach-loading">読み込み中…</span>';
+  const htmlParts = await Promise.all(atts.map(async (a, ai) => {
+    const data  = await idbGet(a.id);
+    const isImg = a.type.startsWith('image/');
+    const inner = isImg && data
+      ? `<img src="${data}" alt="${esc(a.filename)}">`
+      : `<div class="attach-thumb-pdf"><span class="attach-pdf-icon">📄</span>${esc(a.filename)}</div>`;
+    return `<div class="attach-thumb" onclick="openAttachViewer('${a.id}','${esc(a.filename)}','${a.type}')">${inner}<button class="attach-del" onclick="event.stopPropagation();removeAttach(${mi},${ai})" title="削除">✕</button></div>`;
+  }));
+  container.innerHTML = htmlParts.join('');
+}
+async function renderAllAttachmentPreviews() {
+  for (const mi of Object.keys(modalAttachments)) {
+    await renderAttachmentPreview(Number(mi));
+  }
+}
+function removeAttach(mi, ai) {
+  const att = modalAttachments[mi]?.[ai];
+  if (!att) return;
+  modalAttachDeleteIds.add(att.id);
+  modalAttachments[mi].splice(ai, 1);
+  renderAttachmentPreview(mi);
+}
+
+// ─── Span attachment functions ───
+function triggerSpanAttachInput() {
+  const inp = document.getElementById('spanAttachFileInput');
+  inp.value = ''; inp.click();
+}
+function handleSpanAttachInputChange(input) {
+  Array.from(input.files).forEach(file => processSpanAttachFile(file));
+}
+function processSpanAttachFile(file) {
+  if (file.size > 5 * 1024 * 1024) { showToast(`${file.name}：5MB以下のファイルを選んでください`, 'error'); return; }
+  if (!file.type.startsWith('image/') && file.type !== 'application/pdf') { showToast('画像またはPDFを選んでください', 'error'); return; }
+  const id = uid();
+  const reader = new FileReader();
+  reader.onload = async e => {
+    await idbPut(id, e.target.result);
+    spanAttachments.push({ id, filename: file.name, type: file.type, size: file.size });
+    renderSpanAttachPreview();
+  };
+  reader.readAsDataURL(file);
+}
+async function renderSpanAttachPreview() {
+  const container = document.getElementById('span_attach_preview');
+  if (!container) return;
+  if (!spanAttachments.length) { container.innerHTML = ''; return; }
+  container.innerHTML = '<span class="attach-loading">読み込み中…</span>';
+  const htmlParts = await Promise.all(spanAttachments.map(async (a, ai) => {
+    const data  = await idbGet(a.id);
+    const isImg = a.type.startsWith('image/');
+    const inner = isImg && data
+      ? `<img src="${data}" alt="${esc(a.filename)}">`
+      : `<div class="attach-thumb-pdf"><span class="attach-pdf-icon">📄</span>${esc(a.filename)}</div>`;
+    return `<div class="attach-thumb" onclick="openAttachViewer('${a.id}','${esc(a.filename)}','${a.type}')">${inner}<button class="attach-del" onclick="event.stopPropagation();removeSpanAttach(${ai})" title="削除">✕</button></div>`;
+  }));
+  container.innerHTML = htmlParts.join('');
+}
+function removeSpanAttach(ai) {
+  const att = spanAttachments[ai];
+  if (!att) return;
+  spanAttachDeleteIds.add(att.id);
+  spanAttachments.splice(ai, 1);
+  renderSpanAttachPreview();
+}
+
+// ─── Attachment viewer ───
+async function openAttachViewer(id, filename, type) {
+  viewerAttachId = id;
+  document.getElementById('attachViewerName').textContent = filename;
+  if (type === 'application/pdf') {
+    const data = await idbGet(id);
+    if (data) {
+      const b64  = data.split(',')[1];
+      const blob = new Blob([Uint8Array.from(atob(b64), c => c.charCodeAt(0))], { type: 'application/pdf' });
+      const url  = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    }
+    return;
+  }
+  const img = document.getElementById('attachViewerImg');
+  img.src = ''; img.style.display = 'none';
+  const data = await idbGet(id);
+  if (data) { img.src = data; img.style.display = 'block'; }
+  document.getElementById('attachViewer').classList.add('open');
+}
+function closeAttachViewer() {
+  document.getElementById('attachViewer').classList.remove('open');
+  document.getElementById('attachViewerImg').src = '';
+  viewerAttachId = null;
+}
+async function downloadCurrentAttachment() {
+  if (!viewerAttachId) return;
+  const data = await idbGet(viewerAttachId);
+  if (!data) return;
+  const a = document.createElement('a');
+  a.href = data;
+  a.download = document.getElementById('attachViewerName').textContent || 'download';
+  a.click();
+}
+
+// ─── Sync helpers for attachments ───
+async function gatherAttachmentsForSync() {
+  const ids = getAllAttachmentMetaIds();
+  const result = {};
+  for (const id of ids) {
+    const data = await idbGet(id);
+    if (data) result[id] = data;
+  }
+  return result;
+}
+async function restoreAttachmentsFromSync(attachmentsData) {
+  if (!attachmentsData || typeof attachmentsData !== 'object') return;
+  for (const [id, data] of Object.entries(attachmentsData)) {
+    await idbPut(id, data);
+  }
+}
+
 // ─── Start ───
 checkLegacyData();
+
+// URLパラメータ ?gas=<url> でGAS URLを自動設定（家族への共有リンクに便利）
+(function checkUrlParam() {
+  const p = new URLSearchParams(window.location.search);
+  const paramUrl = p.get('gas');
+  if (paramUrl && !localStorage.getItem('cal_gas_url')) {
+    gasUrl = paramUrl;
+    localStorage.setItem('cal_gas_url', paramUrl);
+  }
+})();
+
 gasUrl = localStorage.getItem('cal_gas_url') || '';
 init();
 
@@ -2589,6 +3217,13 @@ setInterval(() => {
     loadFromGAS().then(ok => { if (ok) { renderLegend(); renderCalendar(); } });
   }
 }, 60000);
+
+// バックグラウンドから戻った瞬間に即時同期（スマホでアプリ切り替え後などに有効）
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && gasUrl) {
+    loadFromGAS().then(ok => { if (ok) { renderLegend(); renderCalendar(); } });
+  }
+});
 
 // ─── 日付欄 重要メモ インライン編集 ───
 function openDayNote(day, triggerEl) {
@@ -2637,25 +3272,82 @@ function saveMonthNote(y, m, text) {
   else             localStorage.removeItem(key);
 }
 
-// ─── 連続予定：バッジから直接編集 ───
-function openSpanEditModal(spanId) {
-  const sp = spanEvents.find(s => s.id === spanId);
+// ─── 連続予定：フォームに値をセット（一覧内・バッジ共通） ───
+function editSpanInline(id) {
+  const sp = spanEvents.find(s => s.id === id);
   if (!sp) return;
+  spanFormOpen = true;
+  const f = document.getElementById('spanForm');
+  f.classList.add('open');
+  document.getElementById('spanEditId').value = sp.id;
+  document.getElementById('spanText').value   = sp.text;
+  document.getElementById('spanFrom').value   = sp.from;
+  document.getElementById('spanTo').value     = sp.to;
+  const memoEl = document.getElementById('spanMemo');
+  if (memoEl) memoEl.value = sp.memo || '';
+  spanSelectedColor = sp.color;
+  renderSpanColorDots();
+  renderSpanMCbs(sp.members);
+  spanAttachments = [...(sp.attachments || [])];
+  spanAttachDeleteIds = new Set();
+  renderSpanAttachPreview();
+  // フォームが見えるようにスクロール
+  setTimeout(() => f.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50);
+}
+
+// カレンダーバッジクリック → モーダルを開いてから編集フォームをセット
+function openSpanEditModal(spanId) {
   openSpanModal();
-  setTimeout(() => {
-    spanFormOpen = true;
-    const f = document.getElementById('spanForm');
-    f.classList.add('open');
-    document.getElementById('spanEditId').value = sp.id;
-    document.getElementById('spanText').value   = sp.text;
-    document.getElementById('spanFrom').value   = sp.from;
-    document.getElementById('spanTo').value     = sp.to;
-    const memoEl = document.getElementById('spanMemo');
-    if (memoEl) memoEl.value = sp.memo || '';
-    spanSelectedColor = sp.color;
-    renderSpanColorDots();
-    renderSpanMCbs(sp.members);
-  }, 60);
+  setTimeout(() => editSpanInline(spanId), 80);
+}
+
+// ─── Identity Picker（自分はだれ？） ───
+function showIdentityPicker() {
+  const btns = document.getElementById('identityBtns');
+  btns.innerHTML = members.map((m, i) => `
+    <button class="identity-btn" onclick="setMyMember('${esc(m.name)}')">
+      <span class="identity-dot" style="background:${getTabColor(i)}"></span>
+      ${esc(m.name)}
+      ${m.name === myMember ? ' <span style="margin-left:auto;font-size:0.72rem;color:var(--muted);">✓ 現在の設定</span>' : ''}
+    </button>`).join('');
+  document.getElementById('identityModal').classList.add('open');
+}
+function setMyMember(name) {
+  myMember = name;
+  localStorage.setItem('cal_my_member', name);
+  document.getElementById('identityModal').classList.remove('open');
+  showToast(`${name}さんとして設定しました`, 'success');
+}
+function closeIdentityModal() {
+  document.getElementById('identityModal').classList.remove('open');
+}
+
+// ─── Confirm Dialog ───
+let _confirmResolve = null;
+function showConfirm(msg) {
+  return new Promise(resolve => {
+    _confirmResolve = resolve;
+    document.getElementById('confirmMsg').textContent = msg;
+    document.getElementById('confirmModal').classList.add('open');
+  });
+}
+function confirmOk() {
+  document.getElementById('confirmModal').classList.remove('open');
+  if (_confirmResolve) { _confirmResolve(true); _confirmResolve = null; }
+}
+function confirmCancel() {
+  document.getElementById('confirmModal').classList.remove('open');
+  if (_confirmResolve) { _confirmResolve(false); _confirmResolve = null; }
+}
+
+// ─── Mobile Menu Drawer ───
+function openMenuDrawer() {
+  document.getElementById('menuDrawer').classList.add('open');
+  document.getElementById('menuOverlay').classList.add('open');
+}
+function closeMenuDrawer() {
+  document.getElementById('menuDrawer').classList.remove('open');
+  document.getElementById('menuOverlay').classList.remove('open');
 }
 
 // ─── GAS Settings Modal ───
@@ -2693,6 +3385,25 @@ async function testGasConnection() {
     btn.style.background = '#d93025'; btn.style.color = '#fff';
   }
   setTimeout(() => { btn.textContent = '接続テスト'; btn.style.background = ''; btn.style.color = ''; btn.disabled = false; }, 3000);
+}
+
+// ─── Service Worker 登録（PWA・オフライン対応） ───────
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').then(reg => {
+      // 新しいバージョンが使用可能になったら自動更新
+      reg.addEventListener('updatefound', () => {
+        const newWorker = reg.installing;
+        newWorker.addEventListener('statechange', () => {
+          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+            showToast('アプリを更新しました。再読み込みで反映されます。', '');
+          }
+        });
+      });
+    }).catch(() => {
+      // ローカルファイル（file://）では SW は動作しないため無視
+    });
+  });
 }
 
 </script>
