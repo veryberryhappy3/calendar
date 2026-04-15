@@ -240,38 +240,34 @@ body { font-family: 'Noto Sans JP', sans-serif; background: var(--bg); color: va
     .month-nav-arrow { font-size: 1.5rem; padding: 0 4px; }
     .month-nav-sub { font-size: 0.56rem; margin-top: 0; }
 
-    /* ── ラッパー・グリッド ── */
+    /* ── ラッパー・グリッド：スクロール可能レイアウト ── */
     .calendar-wrap {
-      padding: 2px 3px 0;
-      height: calc(100dvh - 80px);
-      display: flex; flex-direction: column; overflow: hidden;
+      padding: 4px 2px 24px;
+      overflow-y: auto; -webkit-overflow-scrolling: touch;
     }
     .calendar-grid {
-      flex: 1; min-height: 0; overflow: hidden;
       display: grid;
       grid-template-columns: repeat(7, 1fr);
-      grid-template-rows: 14px repeat(6, 1fr);
-      height: 100%;
     }
-    .day-header { font-size: 0.55rem; padding: 1px; line-height: 14px; height: 14px; }
+    .day-header { font-size: 0.65rem; padding: 3px 1px; line-height: 20px; height: 20px; font-weight: 700; }
 
-    /* ── セル ── */
-    .day-cell { min-height: 0 !important; overflow: hidden; display: flex; flex-direction: column; }
+    /* ── セル：タップしやすい最小高さ ── */
+    .day-cell { min-height: 72px !important; overflow: hidden; display: flex; flex-direction: column; }
     .day-top {
-      padding: 2px 0 1px; flex-shrink: 0;
+      padding: 5px 3px 2px; flex-shrink: 0;
       display: flex; justify-content: center; align-items: center;
     }
-    /* 日付：Googleカレンダー風の丸 */
+    /* 日付：Googleカレンダー風の丸（大きく） */
     .day-num {
-      font-size: 0.7rem !important; font-weight: 400; line-height: 1;
-      width: 22px; height: 22px;
+      font-size: 0.95rem !important; font-weight: 700; line-height: 1;
+      width: 30px; height: 30px;
       display: flex; align-items: center; justify-content: center;
       border-radius: 50%;
     }
     .day-cell.today .day-top { background: transparent; }
     .day-cell.today .day-num {
       background: #1a1a1a !important; color: #fff !important;
-      font-size: 0.7rem !important; width: 22px !important; height: 22px !important;
+      font-size: 0.95rem !important; width: 30px !important; height: 30px !important;
     }
     .day-cell.sat-cell .day-num,
     .day-cell.sun-cell .day-num,
@@ -282,13 +278,13 @@ body { font-family: 'Noto Sans JP', sans-serif; background: var(--bg); color: va
 
     /* ── メンバー行：頭文字＋細いバー ── */
     .member-rows {
-      flex: 1; min-height: 0; overflow: hidden;
+      flex: 1; overflow: hidden;
       display: flex; flex-direction: column;
       padding: 1px 2px 1px; gap: 1px;
       border-top: none;
     }
     .member-slot {
-      flex: 1; min-height: 0 !important;
+      flex: 1; min-height: 6px;
       display: flex; align-items: center;
       border-bottom: none; overflow: hidden; gap: 2px;
     }
@@ -322,14 +318,12 @@ body { font-family: 'Noto Sans JP', sans-serif; background: var(--bg); color: va
     /* 定例：非表示 */
     .ev-chip.is-recur { display: none !important; }
 
-    /* 連続予定バッジ：アクセントカラーのバー */
-    .slot-span-badge {
-      font-size: 0 !important; height: 4px !important;
-      padding: 0 !important; display: block;
-      width: 100%; box-sizing: border-box;
-      border-radius: 2px !important; box-shadow: none !important;
-      margin-bottom: 0; line-height: 0; opacity: 0.9;
-    }
+    /* 連続予定バー（スマホ）：テキストなし細バー、開始日のみテキスト表示 */
+    .span-bar { height: 10px !important; font-size: 0 !important; padding: 0 !important; }
+    .span-bar.span-start,
+    .span-bar.span-solo  { height: 14px !important; font-size: 0.55rem !important; padding: 0 3px !important; line-height: 14px !important; }
+    /* 旧バッジは非表示 */
+    .slot-span-badge { display: none !important; }
 
     /* 今日 */
     .day-cell.today { box-shadow: none; background: transparent !important; }
@@ -345,9 +339,9 @@ body { font-family: 'Noto Sans JP', sans-serif; background: var(--bg); color: va
 
   /* 極小画面 */
   @media (max-width: 390px) {
-    .calendar-wrap { height: calc(100dvh - 74px); }
     .screen-header h1 { display: none; }
-    .day-num { font-size: 0.62rem !important; width: 20px !important; height: 20px !important; }
+    .day-cell { min-height: 62px !important; }
+    .day-num { font-size: 0.82rem !important; width: 26px !important; height: 26px !important; }
   }
 
   /* Span colour: applied to individual member-slot level only */
@@ -404,22 +398,47 @@ body { font-family: 'Noto Sans JP', sans-serif; background: var(--bg); color: va
     background: transparent; color: #fff; display: inline;
     width: auto; height: auto; border-radius: 0; font-size: inherit;
   }
-  /* 連続予定バッジ：目立つように・クリック可能 */
+  /* 旧スロット内バッジ（後方互換のみ、新規では非使用） */
   .slot-span-badge {
-    font-size: 0.72rem; font-weight: 700; padding: 2px 6px; border-radius: 4px;
+    font-size: 0.68rem; font-weight: 700; padding: 1px 5px; border-radius: 4px;
     color: #fff; white-space: nowrap; display: block;
-    margin-bottom: 3px; max-width: 100%; overflow: hidden; text-overflow: ellipsis;
-    cursor: pointer; position: relative; z-index: 2;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.22);
-    letter-spacing: 0.02em; line-height: 1.4;
+    margin-bottom: 2px; max-width: 100%; overflow: hidden; text-overflow: ellipsis;
+    cursor: pointer; z-index: 2; letter-spacing: 0.02em; line-height: 1.4;
   }
-  .slot-span-badge:hover { opacity: 0.82; text-decoration: underline; }
   .slot-span-badge.acc-red    { background: var(--acc-red); }
   .slot-span-badge.acc-orange { background: var(--acc-orange); }
   .slot-span-badge.acc-blue   { background: var(--acc-blue); }
   .slot-span-badge.acc-green  { background: var(--acc-green); }
   .slot-span-badge.acc-purple { background: var(--acc-purple); }
   .slot-span-badge.acc-teal   { background: var(--acc-teal); }
+
+  /* ── 連続予定バー（日付セル上部の専用エリア） ── */
+  .span-row {
+    display: flex; flex-direction: column; gap: 1px;
+    overflow: hidden; flex-shrink: 0; margin-bottom: 1px;
+  }
+  .span-bar {
+    height: 17px; display: block;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    cursor: pointer; color: #fff; line-height: 17px;
+    font-size: 0.62rem; font-weight: 700;
+    padding: 0 4px; transition: opacity 0.1s;
+  }
+  .span-bar:hover { opacity: 0.82; }
+  .span-bar.acc-red    { background: var(--acc-red); }
+  .span-bar.acc-orange { background: var(--acc-orange); }
+  .span-bar.acc-blue   { background: var(--acc-blue); }
+  .span-bar.acc-green  { background: var(--acc-green); }
+  .span-bar.acc-purple { background: var(--acc-purple); }
+  .span-bar.acc-teal   { background: var(--acc-teal); }
+  /* 開始日：左丸み・テキスト付き */
+  .span-bar.span-start { border-radius: 8px 0 0 8px; padding-left: 6px; }
+  /* 終了日：右丸み */
+  .span-bar.span-end   { border-radius: 0 8px 8px 0; }
+  /* 中間日：丸みなし・幅いっぱいで視覚的連続性を確保 */
+  .span-bar.span-mid   { border-radius: 0; }
+  /* 単日：両側に丸み */
+  .span-bar.span-solo  { border-radius: 8px; margin: 0 3px; }
 
   /* ── Member rows ── */
   .member-rows { display: flex; flex-direction: column; flex: 1; border-top: 2px solid var(--border); }
@@ -516,17 +535,23 @@ body { font-family: 'Noto Sans JP', sans-serif; background: var(--bg); color: va
   @media (max-width: 680px) {
     .modal-overlay { align-items: flex-end; }
     .modal {
-      width: 100vw; max-height: 88vh;
+      width: 100vw; max-height: 92vh;
       border-radius: 16px 16px 0 0;
-      padding: 16px 14px 32px;
+      padding: 16px 10px 44px;
     }
     .modal-wide { width: 100vw; }
-    .modal-title { font-size: 0.92rem; }
-    .form-group { margin-bottom: 10px; }
-    textarea { font-size: 1rem !important; min-height: 60px; } /* スマホでは大きめに */
-    .memo-area textarea { font-size: 0.88rem !important; }
-    .modal-actions { position: sticky; bottom: 0; background: var(--surface); padding-top: 8px; }
-    .btn-ok { width: 100%; padding: 12px; font-size: 0.9rem; border-radius: 8px; }
+    .modal-title { font-size: 0.98rem; }
+    .form-group { margin-bottom: 16px; }
+    .field-label { font-size: 0.88rem !important; }
+    textarea {
+      font-size: 1rem !important; min-height: 80px;
+      padding: 10px 12px;
+    }
+    .memo-area textarea { font-size: 0.9rem !important; min-height: 50px; }
+    .modal-actions { position: sticky; bottom: 0; background: var(--surface); padding-top: 12px; }
+    .btn-ok { width: 100%; padding: 14px; font-size: 1rem; border-radius: 10px; }
+    .recur-cancel-row { padding: 10px 12px; font-size: 0.82rem; }
+    .modal-swatch { width: 32px !important; height: 32px !important; }
   }
   .modal-wide { width: min(580px, 96vw); }
   .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
@@ -2849,6 +2874,29 @@ function buildCalendarHtml(y, m) {
       : `<div class="day-note-area"><span class="day-note-empty" onclick="event.stopPropagation();openDayNote(${d},this)" title="重要メモを追加">＋</span></div>`;
 
     const allSpansToday = getSpansForDate(ds);
+    const monthStart = `${y}-${String(m).padStart(2,'0')}-01`;
+    const monthEnd   = `${y}-${String(m).padStart(2,'0')}-${String(dim).padStart(2,'0')}`;
+
+    // ── 連続予定バー（セル上部に専用行として表示、重なりなし） ──
+    let spanRowHtml = '';
+    if (allSpansToday.length) {
+      // 開始日順にソート → 毎日同じ縦順を保つ
+      const sortedSpans = [...allSpansToday].sort((a, b) => a.from < b.from ? -1 : a.from > b.from ? 1 : 0);
+      const bars = sortedSpans.map(sp => {
+        const firstVisible = sp.from < monthStart ? monthStart : sp.from;
+        const lastVisible  = sp.to   > monthEnd   ? monthEnd   : sp.to;
+        const isStart = ds === firstVisible;
+        const isEnd   = ds === lastVisible;
+        const posClass = isStart && isEnd ? 'span-solo'
+                       : isStart          ? 'span-start'
+                       : isEnd            ? 'span-end'
+                       :                    'span-mid';
+        const label = isStart ? esc(sp.text) : '';
+        return `<div class="span-bar acc-${sp.color} ${posClass}" onclick="event.stopPropagation();openSpanEditModal('${sp.id}')" title="${esc(sp.text)}">${label}</div>`;
+      }).join('');
+      spanRowHtml = `<div class="span-row">${bars}</div>`;
+    }
+
     let slotsHtml = '';
     members.forEach((mem, mi) => {
       const manualText = mev[d]?.[mem.name] || '';
@@ -2857,19 +2905,6 @@ function buildCalendarHtml(y, m) {
         const date = new Date(y, m-1, d);
         return recurEvents.filter(r => r.members.includes(mem.name) && recurApplies(r, date));
       })();
-      const memberSpans = allSpansToday.filter(s => !s.members.length || s.members.includes(mem.name));
-      let slotCls = '', spanBadgeHtml = '';
-      // 月初日（この月で最初に表示される日）
-      const monthStart = `${y}-${String(m).padStart(2,'0')}-01`;
-      memberSpans.forEach((sp, spIdx) => {
-        if (spIdx === 0) slotCls += ` slot-span-${sp.color}`;
-        // バッジは「この月で最初に表示される日」に表示（前月から続く場合は月初に表示）
-        const firstVisible = sp.from < monthStart ? monthStart : sp.from;
-        if (ds === firstVisible) {
-          if (!slotCls.includes('slot-span-start')) slotCls += ' slot-span-start';
-          spanBadgeHtml += `<span class="slot-span-badge acc-${sp.color}" onclick="event.stopPropagation();openSpanEditModal('${sp.id}')" title="クリックで編集">${esc(sp.text)}</span>`;
-        }
-      });
       let chipHtml = '';
       if (manualText) {
         const accCls = manualAcc ? ` acc-${manualAcc}` : '';
@@ -2892,10 +2927,10 @@ function buildCalendarHtml(y, m) {
       const hasAtt   = !!(mev[d]?.[mem.name+'_attachments']?.length);
       const memoDot  = hasMemo ? `<span style="font-size:0.55rem;color:#aaa;margin-left:auto;flex-shrink:0;">📝</span>` : '';
       const attDot   = hasAtt  ? `<span class="att-dot">📎</span>` : '';
-      const hasEvent = !!(chipHtml || spanBadgeHtml);
-      slotsHtml += `<div class="member-slot slot-${mi}${slotCls} ${hasEvent||hasAtt?'':'empty-slot'}"><div class="m-tab"></div><div class="m-badge">${esc(mem.name[0])}</div><div class="m-content">${spanBadgeHtml}${chipHtml}</div>${attDot}${memoDot}</div>`;
+      const hasEvent = !!(chipHtml);
+      slotsHtml += `<div class="member-slot slot-${mi} ${hasEvent||hasAtt?'':'empty-slot'}"><div class="m-tab"></div><div class="m-badge">${esc(mem.name[0])}</div><div class="m-content">${chipHtml}</div>${attDot}${memoDot}</div>`;
     });
-    html += `<div class="day-cell ${cellCls}" onclick="openEditModal(${d})"><div class="day-top">${dayNumHtml}${holidayLabel}${noteHtml}</div><div class="member-rows">${slotsHtml}</div></div>`;
+    html += `<div class="day-cell ${cellCls}" onclick="openEditModal(${d})"><div class="day-top">${dayNumHtml}${holidayLabel}${noteHtml}</div>${spanRowHtml}<div class="member-rows">${slotsHtml}</div></div>`;
   }
   return html;
 }
