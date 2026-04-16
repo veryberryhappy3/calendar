@@ -864,11 +864,16 @@ body { font-family: 'Noto Sans JP', sans-serif; background: var(--bg); color: va
   .attach-header { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
   .attach-label { font-size: 0.75rem; color: var(--muted); font-weight: 600; }
   .attach-add-btn {
-    font-size: 0.7rem; padding: 3px 10px; border-radius: 10px;
+    /* PC/スマホ両対応：pointer-events:auto を明示してクリックを確実に受け取る */
+    font-size: 0.7rem; padding: 5px 12px; border-radius: 10px;
     border: 1px dashed var(--border); background: var(--bg);
     color: var(--text); cursor: pointer; font-family: inherit; transition: border-color 0.1s;
+    pointer-events: auto; user-select: none; -webkit-user-select: none;
+    -webkit-appearance: none; appearance: none; display: inline-block;
+    vertical-align: middle;
   }
-  .attach-add-btn:hover { border-color: #888; }
+  .attach-add-btn:hover { border-color: #555; background: #f0ede8; }
+  .attach-add-btn:active { background: #e8e4dd; }
   .attach-preview { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 2px; }
   .attach-thumb {
     position: relative; width: 72px; height: 72px;
@@ -1469,15 +1474,12 @@ body { font-family: 'Noto Sans JP', sans-serif; background: var(--bg); color: va
 </div>
 
 
-<!-- Hidden file input for attachments -->
-<input type="file" id="attachFileInput" accept="image/*,.pdf" multiple style="display:none" onchange="handleAttachInputChange(this)">
-<!-- Hidden file input for span attachments -->
-<input type="file" id="spanAttachFileInput" accept="image/*,.pdf" multiple style="display:none" onchange="handleSpanAttachInputChange(this)">
-
 <!-- Attachment full-screen viewer -->
 <div class="attach-viewer" id="attachViewer">
   <button class="attach-viewer-close" onclick="closeAttachViewer()">✕</button>
   <img id="attachViewerImg" src="" alt="" style="display:none">
+  <!-- PDF を PC/スマホ両対応で表示 -->
+  <iframe id="attachViewerPdf" src="" title="PDF" style="display:none;width:min(90vw,820px);height:70vh;border:none;border-radius:6px;background:#fff;"></iframe>
   <div class="attach-viewer-name" id="attachViewerName"></div>
   <div class="attach-viewer-actions">
     <button class="attach-viewer-btn" onclick="downloadCurrentAttachment()">⬇ ダウンロード</button>
@@ -3085,13 +3087,36 @@ let spanAttachments    = [];
 let spanAttachDeleteIds = new Set();
 
 // ─── File input handling ───
+// display:none の input.click() は Firefox などで動作しないため、
+// 毎回 input 要素を動的生成して DOM に追加してから click する方式に変更
+function _createFileInput(onFilesSelected) {
+  const inp = document.createElement('input');
+  inp.type     = 'file';
+  inp.accept   = 'image/*,.pdf';
+  inp.multiple = true;
+  // display:none は避け、画面外に隠す（Firefox 等での互換性対策）
+  inp.style.cssText = 'position:fixed;top:-999px;left:-999px;opacity:0;width:1px;height:1px;pointer-events:none;';
+  document.body.appendChild(inp);
+  // change イベント（ファイル選択後）
+  inp.addEventListener('change', function () {
+    Array.from(this.files).forEach(f => onFilesSelected(f));
+    _cleanupFileInput(inp);
+  }, { once: true });
+  // 30秒後に自動クリーンアップ（キャンセル時のリーク防止）
+  inp._cleanupTimer = setTimeout(() => _cleanupFileInput(inp), 30000);
+  return inp;
+}
+function _cleanupFileInput(inp) {
+  clearTimeout(inp._cleanupTimer);
+  if (inp.parentNode) inp.parentNode.removeChild(inp);
+}
+
 function triggerAttachInput(mi) {
-  currentAttachMi = mi;
-  const inp = document.getElementById('attachFileInput');
-  inp.value = '';
+  const inp = _createFileInput(file => processAttachFile(file, mi));
   inp.click();
 }
 function handleAttachInputChange(input) {
+  // 旧コード互換（静的 input が残っている場合のフォールバック）
   if (currentAttachMi === null) return;
   const mi = currentAttachMi;
   Array.from(input.files).forEach(file => processAttachFile(file, mi));
@@ -3146,10 +3171,11 @@ function removeAttach(mi, ai) {
 
 // ─── Span attachment functions ───
 function triggerSpanAttachInput() {
-  const inp = document.getElementById('spanAttachFileInput');
-  inp.value = ''; inp.click();
+  const inp = _createFileInput(file => processSpanAttachFile(file));
+  inp.click();
 }
 function handleSpanAttachInputChange(input) {
+  // 旧コード互換フォールバック
   Array.from(input.files).forEach(file => processSpanAttachFile(file));
 }
 function processSpanAttachFile(file) {
@@ -3191,24 +3217,36 @@ function removeSpanAttach(ai) {
 async function openAttachViewer(id, filename, type) {
   viewerAttachId = id;
   document.getElementById('attachViewerName').textContent = filename;
-  if (type === 'application/pdf') {
-    const data = await idbGet(id);
-    if (data) {
-      const b64  = data.split(',')[1];
-      const blob = new Blob([Uint8Array.from(atob(b64), c => c.charCodeAt(0))], { type: 'application/pdf' });
-      const url  = URL.createObjectURL(blob);
-      window.open(url, '_blank');
-      setTimeout(() => URL.revokeObjectURL(url), 60000);
-    }
-    return;
-  }
+
   const img = document.getElementById('attachViewerImg');
+  const pdf = document.getElementById('attachViewerPdf');
   img.src = ''; img.style.display = 'none';
+  // 前の PDF blob URL を解放
+  if (pdf._blobUrl) { URL.revokeObjectURL(pdf._blobUrl); pdf._blobUrl = null; }
+  pdf.src = ''; pdf.style.display = 'none';
+
   const data = await idbGet(id);
-  if (data) { img.src = data; img.style.display = 'block'; }
+  if (!data) { showToast('ファイルが見つかりません', 'error'); return; }
+
+  if (type === 'application/pdf') {
+    // window.open はポップアップブロッカーで止められるため
+    // iframe に blob URL を埋め込んで表示（PC/スマホ両対応）
+    const b64  = data.split(',')[1];
+    const blob = new Blob([Uint8Array.from(atob(b64), c => c.charCodeAt(0))], { type: 'application/pdf' });
+    const url  = URL.createObjectURL(blob);
+    pdf._blobUrl    = url;
+    pdf.src         = url;
+    pdf.style.display = 'block';
+  } else {
+    img.src = data;
+    img.style.display = 'block';
+  }
   document.getElementById('attachViewer').classList.add('open');
 }
 function closeAttachViewer() {
+  const pdf = document.getElementById('attachViewerPdf');
+  if (pdf && pdf._blobUrl) { URL.revokeObjectURL(pdf._blobUrl); pdf._blobUrl = null; }
+  if (pdf) { pdf.src = ''; pdf.style.display = 'none'; }
   document.getElementById('attachViewer').classList.remove('open');
   document.getElementById('attachViewerImg').src = '';
   viewerAttachId = null;
@@ -3224,13 +3262,22 @@ async function downloadCurrentAttachment() {
 }
 
 // ─── Sync helpers for attachments ───
+// GAS POST の上限（概算 10MB）を超えないよう、合計 8MB 以内に制限
+const MAX_ATTACH_SYNC_BYTES = 8 * 1024 * 1024;
 async function gatherAttachmentsForSync() {
   const ids = getAllAttachmentMetaIds();
   const result = {};
+  let totalBytes = 0;
+  let skipped = 0;
   for (const id of ids) {
     const data = await idbGet(id);
-    if (data) result[id] = data;
+    if (!data) continue;
+    // Base64 文字列の長さ ≈ バイト数（概算）
+    if (totalBytes + data.length > MAX_ATTACH_SYNC_BYTES) { skipped++; continue; }
+    result[id] = data;
+    totalBytes += data.length;
   }
+  if (skipped > 0) console.warn(`[attach-sync] 容量超過のため ${skipped} 件の添付をスキップしました`);
   return result;
 }
 async function restoreAttachmentsFromSync(attachmentsData) {
