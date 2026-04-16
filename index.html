@@ -1637,8 +1637,54 @@ function getSpansForDate(ds) {
   return spanEvents.filter(s => s.from <= ds && s.to >= ds);
 }
 
+// ─── 連続予定の重複排除 ───
+// IDが同じ複数エントリ → 最新(_updatedAt)を1件だけ残す
+// 内容（text+from+to）が同じ複数エントリ → 最新を1件残し、古いIDはdeletedSpanIdsに追加
+function deduplicateSpans() {
+  if (!spanEvents.length) return false;
+  const before = spanEvents.length;
+
+  // ① 同一ID重複を除去（タイムスタンプ降順で先頭1件を残す）
+  const byId = new Map();
+  spanEvents.forEach(s => {
+    const cur = byId.get(s.id);
+    if (!cur || (s._updatedAt || 0) > (cur._updatedAt || 0)) byId.set(s.id, s);
+  });
+  spanEvents = [...byId.values()];
+
+  // ② 内容（text+from+to）が同じ複数エントリを除去
+  const byContent = new Map();
+  spanEvents.forEach(s => {
+    const key = `${s.text}||${s.from}||${s.to}`;
+    const cur = byContent.get(key);
+    if (!cur || (s._updatedAt || 0) > (cur._updatedAt || 0)) byContent.set(key, s);
+  });
+  const kept = new Set(byContent.values());
+  const removed = spanEvents.filter(s => !kept.has(s));
+  // 削除されたIDをトゥームストーンに追加
+  removed.forEach(s => {
+    if (!deletedSpanIds.some(d => d.id === s.id)) {
+      deletedSpanIds.push({ id: s.id, deletedAt: Date.now() });
+    }
+  });
+  spanEvents = [...kept];
+
+  const removed_count = before - spanEvents.length;
+  if (removed_count > 0) {
+    localStorage.setItem('cal_spans',         JSON.stringify(spanEvents));
+    localStorage.setItem('cal_deleted_spans', JSON.stringify(deletedSpanIds));
+    console.log(`[dedup] ${removed_count}件の重複連続予定を除去しました`);
+  }
+  return removed_count > 0;
+}
+
 // ─── Init ───
 function init() {
+  // 起動時に重複スパンをクリーンアップ
+  if (deduplicateSpans()) {
+    // 重複が除去されたらGASにも反映
+    if (gasUrl) setTimeout(syncToGAS, 2000);
+  }
   renderLegend(); renderCalendar();
   // Scroll to today if viewing current month
   const today = new Date();
@@ -2119,10 +2165,19 @@ function saveSpanItem() {
       else delete sp.attachments;
     }
   } else {
-    // 新規追加
-    const newSpan = { id:uid(), text, from, to, members:mems, color:spanSelectedColor, memo, _updatedAt: Date.now() };
-    if (spanAttachments.length) newSpan.attachments = [...spanAttachments];
-    spanEvents.push(newSpan);
+    // 新規追加（同内容の重複を防ぐ：同じtext+from+toが既存にあれば更新として扱う）
+    const dupIdx = spanEvents.findIndex(s => s.text === text && s.from === from && s.to === to);
+    if (dupIdx !== -1) {
+      // 既存を上書き（重複作成を防止）
+      const sp = spanEvents[dupIdx];
+      sp.members = mems; sp.color = spanSelectedColor; sp.memo = memo; sp._updatedAt = Date.now();
+      if (spanAttachments.length) sp.attachments = [...spanAttachments];
+      else delete sp.attachments;
+    } else {
+      const newSpan = { id:uid(), text, from, to, members:mems, color:spanSelectedColor, memo, _updatedAt: Date.now() };
+      if (spanAttachments.length) newSpan.attachments = [...spanAttachments];
+      spanEvents.push(newSpan);
+    }
   }
   spanAttachDeleteIds.forEach(id => idbDel(id).catch(() => {}));
   spanAttachDeleteIds = new Set();
@@ -2350,7 +2405,8 @@ async function syncToGAS() {
         });
       }
 
-      // ローカルストレージ更新
+      // マージ後に重複スパンを除去してからローカルストレージ更新
+      deduplicateSpans();
       localStorage.setItem('cal_recurs',        JSON.stringify(recurEvents));
       localStorage.setItem('cal_spans',         JSON.stringify(spanEvents));
       localStorage.setItem('cal_deleted_spans', JSON.stringify(deletedSpanIds));
@@ -2429,6 +2485,8 @@ async function loadFromGAS() {
         else if ((rs._updatedAt || 0) > (spanEvents[li]._updatedAt || 0)) spanEvents[li] = rs;
       });
     }
+    // マージ後に重複を排除してから保存
+    deduplicateSpans();
     localStorage.setItem('cal_members',       JSON.stringify(members));
     localStorage.setItem('cal_events',        JSON.stringify(allEvents));
     localStorage.setItem('cal_recurs',        JSON.stringify(recurEvents));
