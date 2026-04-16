@@ -251,23 +251,23 @@ body { font-family: 'Noto Sans JP', sans-serif; background: var(--bg); color: va
     }
     .day-header { font-size: 0.65rem; padding: 3px 1px; line-height: 20px; height: 20px; font-weight: 700; }
 
-    /* ── セル：タップしやすい最小高さ ── */
-    .day-cell { min-height: 72px !important; overflow: hidden; display: flex; flex-direction: column; }
+    /* ── セル：タップしやすい最小高さ（スマホ向けに拡大） ── */
+    .day-cell { min-height: 90px !important; overflow: hidden; display: flex; flex-direction: column; }
     .day-top {
-      padding: 5px 3px 2px; flex-shrink: 0;
+      padding: 6px 3px 3px; flex-shrink: 0;
       display: flex; justify-content: center; align-items: center;
     }
-    /* 日付：Googleカレンダー風の丸（大きく） */
+    /* 日付：Googleカレンダー風の丸（大きく・タップしやすく） */
     .day-num {
-      font-size: 0.95rem !important; font-weight: 700; line-height: 1;
-      width: 30px; height: 30px;
+      font-size: 1.05rem !important; font-weight: 700; line-height: 1;
+      width: 34px; height: 34px;
       display: flex; align-items: center; justify-content: center;
       border-radius: 50%;
     }
     .day-cell.today .day-top { background: transparent; }
     .day-cell.today .day-num {
       background: #1a1a1a !important; color: #fff !important;
-      font-size: 0.95rem !important; width: 30px !important; height: 30px !important;
+      font-size: 1.05rem !important; width: 34px !important; height: 34px !important;
     }
     .day-cell.sat-cell .day-num,
     .day-cell.sun-cell .day-num,
@@ -340,8 +340,8 @@ body { font-family: 'Noto Sans JP', sans-serif; background: var(--bg); color: va
   /* 極小画面 */
   @media (max-width: 390px) {
     .screen-header h1 { display: none; }
-    .day-cell { min-height: 62px !important; }
-    .day-num { font-size: 0.82rem !important; width: 26px !important; height: 26px !important; }
+    .day-cell { min-height: 76px !important; }
+    .day-num { font-size: 0.9rem !important; width: 28px !important; height: 28px !important; }
   }
 
   /* Span colour: applied to individual member-slot level only */
@@ -2272,8 +2272,11 @@ async function syncToGAS() {
   };
 
   try {
-    // ① GASから最新データを取得
-    const loadRes = await fetch(gasUrl + '?action=load', { redirect:'follow' });
+    // ① GASから最新データを取得（15秒タイムアウト）
+    const loadCtrl = new AbortController();
+    const loadTimer = setTimeout(() => loadCtrl.abort(), 15000);
+    const loadRes = await fetch(gasUrl + '?action=load', { redirect:'follow', signal: loadCtrl.signal });
+    clearTimeout(loadTimer);
     const loadJson = await loadRes.json();
 
     if (loadJson.status === 'ok' && loadJson.data) {
@@ -2362,7 +2365,10 @@ async function syncToGAS() {
     for (let attempt = 0; attempt < 2 && !saved; attempt++) {
       try {
         const body = JSON.stringify({ action: 'save_all', members, allEvents, recurEvents, spanEvents, deletedSpanIds, attachmentsData });
-        const res  = await fetch(gasUrl, { method:'POST', redirect:'follow', headers:{'Content-Type':'text/plain'}, body });
+        const saveCtrl = new AbortController();
+        const saveTimer = setTimeout(() => saveCtrl.abort(), 20000);
+        const res  = await fetch(gasUrl, { method:'POST', redirect:'follow', headers:{'Content-Type':'text/plain'}, body, signal: saveCtrl.signal });
+        clearTimeout(saveTimer);
         const json = await res.json();
         if (json.status === 'ok') saved = true;
       } catch(e) {
@@ -2390,11 +2396,17 @@ async function syncToGAS() {
   }
 }
 
+let _loadLock = false;
 async function loadFromGAS() {
   if (!gasUrl) return false;
+  if (_loadLock) return false;
+  _loadLock = true;
   setSyncStatus('syncing');
   try {
-    const res = await fetch(gasUrl + '?action=load', { redirect:'follow' });
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 15000);
+    const res = await fetch(gasUrl + '?action=load', { redirect:'follow', signal: ctrl.signal });
+    clearTimeout(timer);
     const json = await res.json();
     if (json.status !== 'ok' || !json.data) { setSyncStatus('error'); return false; }
     const d = json.data;
@@ -2427,6 +2439,7 @@ async function loadFromGAS() {
     setSyncStatus('ok');
     return true;
   } catch(e) { setSyncStatus('offline'); return false; }
+  finally { _loadLock = false; }
 }
 
 // ─── Print Modal ───
@@ -2830,8 +2843,9 @@ function buildCalendarHtml(y, m) {
     `<div class="day-header ${i===5?'sat':i===6?'sun':''}">${d}</div>`).join('');
 
   // 曜日直下のメモ帯（月全体のメモ1行）
-  const monthNoteKey = `note_${y}_${m}`;
-  const monthNote = localStorage.getItem(monthNoteKey) || '';
+  // allEvents に保存してGAS同期対象にする（localStorage は後方互換として併用）
+  const monthNote = allEvents[monthKey]?.['_meta']?.['_monthNote']
+                 || localStorage.getItem(`note_${y}_${m}`) || '';
   html += `<div class="week-note-bar">
     <div class="week-note-label">メモ</div>
     <textarea class="week-note-input" rows="1"
@@ -2885,13 +2899,20 @@ function buildCalendarHtml(y, m) {
       const bars = sortedSpans.map(sp => {
         const firstVisible = sp.from < monthStart ? monthStart : sp.from;
         const lastVisible  = sp.to   > monthEnd   ? monthEnd   : sp.to;
-        const isStart = ds === firstVisible;
-        const isEnd   = ds === lastVisible;
-        const posClass = isStart && isEnd ? 'span-solo'
-                       : isStart          ? 'span-start'
-                       : isEnd            ? 'span-end'
-                       :                    'span-mid';
-        const label = isStart ? esc(sp.text) : '';
+        const isActualStart = ds === firstVisible;
+        const isActualEnd   = ds === lastVisible;
+        // 週境界を考慮：月曜始まり(dow===0)を行頭Start、日曜(dow===6)を行末Endとして扱う
+        const inSpan = ds > firstVisible && ds < lastVisible;
+        const isRowStart = dow === 0;  // 月曜（グリッド行の先頭）
+        const isRowEnd   = dow === 6;  // 日曜（グリッド行の末尾）
+        const effectiveStart = isActualStart || (isRowStart && inSpan);
+        const effectiveEnd   = isActualEnd   || (isRowEnd   && inSpan);
+        const posClass = effectiveStart && effectiveEnd ? 'span-solo'
+                       : effectiveStart                 ? 'span-start'
+                       : effectiveEnd                   ? 'span-end'
+                       :                                  'span-mid';
+        // テキストラベルは実際の開始日のみ表示
+        const label = isActualStart ? esc(sp.text) : '';
         return `<div class="span-bar acc-${sp.color} ${posClass}" onclick="event.stopPropagation();openSpanEditModal('${sp.id}')" title="${esc(sp.text)}">${label}</div>`;
       }).join('');
       spanRowHtml = `<div class="span-row">${bars}</div>`;
@@ -3194,9 +3215,14 @@ setInterval(() => {
 }, 60000);
 
 // バックグラウンドから戻った瞬間に即時同期（スマホでアプリ切り替え後などに有効）
+// デバウンス処理：短時間に複数回発火しても1回しか同期しない
+let _visibilityTimer = null;
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && gasUrl) {
-    loadFromGAS().then(ok => { if (ok) { renderLegend(); renderCalendar(); } });
+    clearTimeout(_visibilityTimer);
+    _visibilityTimer = setTimeout(() => {
+      loadFromGAS().then(ok => { if (ok) { renderLegend(); renderCalendar(); } });
+    }, 500);
   }
 });
 
@@ -3242,9 +3268,25 @@ function saveDayNote(day, note) {
 }
 
 function saveMonthNote(y, m, text) {
-  const key = `note_${y}_${m}`;
-  if (text.trim()) localStorage.setItem(key, text);
-  else             localStorage.removeItem(key);
+  // allEvents の _meta キーに保存 → GAS同期に含まれる
+  const monthKey = `${y}-${m}`;
+  if (!allEvents[monthKey]) allEvents[monthKey] = {};
+  if (!allEvents[monthKey]['_meta']) allEvents[monthKey]['_meta'] = {};
+  if (text.trim()) {
+    allEvents[monthKey]['_meta']['_monthNote'] = text;
+    allEvents[monthKey]['_meta']['_monthNote_updatedAt'] = Date.now();
+  } else {
+    delete allEvents[monthKey]['_meta']['_monthNote'];
+    delete allEvents[monthKey]['_meta']['_monthNote_updatedAt'];
+    if (!Object.keys(allEvents[monthKey]['_meta']).length) delete allEvents[monthKey]['_meta'];
+    if (!Object.keys(allEvents[monthKey]).length) delete allEvents[monthKey];
+  }
+  // 後方互換：localStorageにも保存
+  const lsKey = `note_${y}_${m}`;
+  if (text.trim()) localStorage.setItem(lsKey, text);
+  else             localStorage.removeItem(lsKey);
+  localStorage.setItem('cal_events', JSON.stringify(allEvents));
+  if (gasUrl) syncToGAS();
 }
 
 // ─── 連続予定：フォームに値をセット（一覧内・バッジ共通） ───
