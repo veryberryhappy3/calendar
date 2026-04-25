@@ -15,7 +15,21 @@
 const SHEET_NAME = 'CalendarData';
 
 function getSheet() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let ss = null;
+  try { ss = SpreadsheetApp.getActiveSpreadsheet(); } catch(e) { ss = null; }
+
+  if (!ss) {
+    // スタンドアロンスクリプトの場合: スクリプトプロパティからIDを取得 or 新規作成
+    const props = PropertiesService.getScriptProperties();
+    const ssId  = props.getProperty('SPREADSHEET_ID');
+    if (ssId) {
+      ss = SpreadsheetApp.openById(ssId);
+    } else {
+      ss = SpreadsheetApp.create('家族カレンダーデータ');
+      props.setProperty('SPREADSHEET_ID', ss.getId());
+    }
+  }
+
   let sheet = ss.getSheetByName(SHEET_NAME);
   if (!sheet) {
     sheet = ss.insertSheet(SHEET_NAME);
