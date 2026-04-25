@@ -69,18 +69,124 @@ function loadData() {
   }
 }
 
+// ── サーバー側マージヘルパー ────────────────────────────────
+
+function mergeAllEvents(stored, incoming) {
+  const SFXS = ['_acc', '_memo', '_updatedAt', '_recur_cancel', '_recur_hidden', '_attachments', '_note'];
+  const merged = JSON.parse(JSON.stringify(stored));
+  Object.keys(incoming).forEach(function(monthKey) {
+    if (!merged[monthKey]) merged[monthKey] = {};
+    const days = incoming[monthKey];
+    Object.keys(days).forEach(function(day) {
+      const incomingDay = days[day];
+      if (!merged[monthKey][day]) {
+        merged[monthKey][day] = JSON.parse(JSON.stringify(incomingDay));
+      } else {
+        const local = merged[monthKey][day];
+        const incomingMemberKeys = Object.keys(incomingDay).filter(function(k) {
+          return !SFXS.some(function(s) { return k.endsWith(s); });
+        });
+        incomingMemberKeys.forEach(function(mKey) {
+          const localTs    = local[mKey + '_updatedAt']       || 0;
+          const incomingTs = incomingDay[mKey + '_updatedAt'] || 0;
+          if (incomingTs > localTs || !(mKey in local)) {
+            local[mKey] = incomingDay[mKey];
+            SFXS.forEach(function(sfx) {
+              const k = mKey + sfx;
+              if (incomingDay[k] !== undefined) local[k] = incomingDay[k];
+              else delete local[k];
+            });
+          }
+        });
+        Object.keys(incomingDay).forEach(function(k) {
+          if (!SFXS.some(function(s) { return k.endsWith(s); }) && incomingMemberKeys.indexOf(k) >= 0) return;
+          if (!(k in local)) local[k] = incomingDay[k];
+        });
+      }
+    });
+  });
+  return merged;
+}
+
+function mergeRecurEvents(stored, incoming) {
+  const result = JSON.parse(JSON.stringify(stored));
+  const storedMap = {};
+  result.forEach(function(r, i) { storedMap[r.id] = i; });
+  incoming.forEach(function(r) {
+    if (r.id in storedMap) {
+      if ((r._updatedAt || 0) > (result[storedMap[r.id]]._updatedAt || 0)) {
+        result[storedMap[r.id]] = r;
+      }
+    } else {
+      storedMap[r.id] = result.length;
+      result.push(r);
+    }
+  });
+  return result;
+}
+
+function mergeDeletedSpanIds(stored, incoming) {
+  const result = JSON.parse(JSON.stringify(stored));
+  const storedSet = {};
+  stored.forEach(function(d) { storedSet[d.id] = true; });
+  incoming.forEach(function(d) {
+    if (!storedSet[d.id]) { result.push(d); storedSet[d.id] = true; }
+  });
+  return result;
+}
+
+function mergeSpanEvents(stored, incoming, allDeletedIds) {
+  const deletedSet = {};
+  allDeletedIds.forEach(function(d) { deletedSet[d.id] = true; });
+  const result = JSON.parse(JSON.stringify(stored)).filter(function(s) { return !deletedSet[s.id]; });
+  const resultMap = {};
+  result.forEach(function(s, i) { resultMap[s.id] = i; });
+  incoming.forEach(function(rs) {
+    if (deletedSet[rs.id]) return;
+    if (rs.id in resultMap) {
+      if ((rs._updatedAt || 0) > (result[resultMap[rs.id]]._updatedAt || 0)) {
+        result[resultMap[rs.id]] = rs;
+      }
+    } else {
+      resultMap[rs.id] = result.length;
+      result.push(rs);
+    }
+  });
+  return result;
+}
+
+// ── 保存（サーバー側マージ） ────────────────────────────────
+
 function saveData(body) {
   try {
     const sheet = getSheet();
-    const data = {
-      members:        body.members        || [],
-      allEvents:      body.allEvents      || {},
-      recurEvents:    body.recurEvents    || [],
-      spanEvents:     body.spanEvents     || [],
-      deletedSpanIds: body.deletedSpanIds || [],
-      attachmentsData: body.attachmentsData || {},
-      _savedAt: new Date().toISOString(),
+    const raw = sheet.getRange('B1').getValue();
+    const stored = raw ? JSON.parse(raw) : {
+      members: [], allEvents: {}, recurEvents: [],
+      spanEvents: [], deletedSpanIds: [], attachmentsData: {}
     };
+
+    const incomingDeletedSpanIds = body.deletedSpanIds || [];
+    const mergedDeletedSpanIds   = mergeDeletedSpanIds(stored.deletedSpanIds || [], incomingDeletedSpanIds);
+
+    const incomingMembers = body.members || [];
+    const mergedMembers   = incomingMembers.length >= (stored.members || []).length
+      ? incomingMembers
+      : (stored.members || []);
+
+    const incomingAttachments = body.attachmentsData || {};
+    const mergedAttachments   = Object.assign({}, stored.attachmentsData || {}, incomingAttachments);
+
+    const data = {
+      members:         mergedMembers,
+      allEvents:       mergeAllEvents(stored.allEvents || {}, body.allEvents || {}),
+      recurEvents:     mergeRecurEvents(stored.recurEvents || [], body.recurEvents || []),
+      spanEvents:      mergeSpanEvents(stored.spanEvents || [], body.spanEvents || [], mergedDeletedSpanIds),
+      deletedSpanIds:  mergedDeletedSpanIds,
+      attachmentsData: mergedAttachments,
+      _savedAt:        new Date().toISOString(),
+    };
+
     sheet.getRange('B1').setValue(JSON.stringify(data));
     return ContentService
       .createTextOutput(JSON.stringify({ status: 'ok' }))

@@ -2249,8 +2249,8 @@ function saveRecurItem() {
   const from=document.getElementById('recurFrom').value||null;
   const to=document.getElementById('recurTo').value||null;
   const eid=document.getElementById('recurEditId').value;
-  if(eid){ const r=recurEvents.find(x=>x.id===eid); if(r){r.text=text;r.dows=dows;r.members=mems;r.from=from;r.to=to;} }
-  else recurEvents.push({id:uid(),text,members:mems,dows,from,to});
+  if(eid){ const r=recurEvents.find(x=>x.id===eid); if(r){r.text=text;r.dows=dows;r.members=mems;r.from=from;r.to=to;r._updatedAt=Date.now();} }
+  else recurEvents.push({id:uid(),text,members:mems,dows,from,to,_updatedAt:Date.now()});
   saveData(); hideRecurForm(); renderRecurList();
 }
 document.querySelectorAll('.dow-btn').forEach(b=>b.addEventListener('click',()=>b.classList.toggle('active')));
@@ -2339,10 +2339,18 @@ async function syncToGAS() {
     if (loadJson.status === 'ok' && loadJson.data) {
       const remote = loadJson.data;
 
-      // ② recurEvents：IDベースマージ
+      // ② recurEvents：タイムスタンプ付き last-write-wins マージ
       if (remote.recurEvents?.length) {
-        const localIds = new Set(recurEvents.map(r => r.id));
-        remote.recurEvents.forEach(r => { if (!localIds.has(r.id)) recurEvents.push(r); });
+        const localMap = new Map(recurEvents.map(r => [r.id, r]));
+        remote.recurEvents.forEach(r => {
+          const loc = localMap.get(r.id);
+          if (!loc) {
+            recurEvents.push(r);
+          } else if ((r._updatedAt || 0) > (loc._updatedAt || 0)) {
+            const idx = recurEvents.findIndex(x => x.id === r.id);
+            if (idx !== -1) recurEvents[idx] = r;
+          }
+        });
       }
 
       // ③ spanEvents：タイムスタンプ付き last-write-wins マージ（削除の同期も含む）
@@ -2468,9 +2476,51 @@ async function loadFromGAS() {
     const json = await res.json();
     if (json.status !== 'ok' || !json.data) { setSyncStatus('error'); return false; }
     const d = json.data;
-    if (d.members     && d.members.length)                  members     = d.members;
-    if (d.allEvents   && Object.keys(d.allEvents).length)   allEvents   = d.allEvents;
-    if (d.recurEvents && d.recurEvents.length)              recurEvents = d.recurEvents;
+    if (d.members && d.members.length) members = d.members;
+    // allEvents：タイムスタンプ付き last-write-wins マージ
+    if (d.allEvents && Object.keys(d.allEvents).length) {
+      const SFXS = ['_acc','_memo','_updatedAt','_recur_cancel','_recur_hidden'];
+      Object.entries(d.allEvents).forEach(([monthKey, days]) => {
+        if (!allEvents[monthKey]) allEvents[monthKey] = {};
+        Object.entries(days).forEach(([day, remoteDay]) => {
+          if (!allEvents[monthKey][day]) {
+            allEvents[monthKey][day] = { ...remoteDay };
+          } else {
+            const local = allEvents[monthKey][day];
+            const remoteMemberKeys = Object.keys(remoteDay).filter(k => !SFXS.some(s => k.endsWith(s)));
+            remoteMemberKeys.forEach(mKey => {
+              const localTs  = local[mKey+'_updatedAt']     || 0;
+              const remoteTs = remoteDay[mKey+'_updatedAt'] || 0;
+              if (remoteTs > localTs || !(mKey in local)) {
+                local[mKey] = remoteDay[mKey];
+                SFXS.forEach(sfx => {
+                  const k = mKey + sfx;
+                  if (remoteDay[k] !== undefined) local[k] = remoteDay[k];
+                  else delete local[k];
+                });
+              }
+            });
+            Object.entries(remoteDay).forEach(([k, v]) => {
+              if (!SFXS.some(s => k.endsWith(s)) && remoteMemberKeys.includes(k)) return;
+              if (!(k in local)) local[k] = v;
+            });
+          }
+        });
+      });
+    }
+    // recurEvents：タイムスタンプ付き last-write-wins マージ
+    if (d.recurEvents?.length) {
+      const localMap = new Map(recurEvents.map(r => [r.id, r]));
+      d.recurEvents.forEach(r => {
+        const loc = localMap.get(r.id);
+        if (!loc) {
+          recurEvents.push(r);
+        } else if ((r._updatedAt || 0) > (loc._updatedAt || 0)) {
+          const idx = recurEvents.findIndex(x => x.id === r.id);
+          if (idx !== -1) recurEvents[idx] = r;
+        }
+      });
+    }
     // spanEvents：削除トゥームストーンとタイムスタンプを考慮したスマートマージ
     if (d.deletedSpanIds?.length) {
       const remoteDelSet = new Set(d.deletedSpanIds.map(e => e.id));
@@ -3315,7 +3365,7 @@ if (gasUrl) {
 
 setInterval(() => {
   if (gasUrl && document.visibilityState === 'visible') {
-    loadFromGAS().then(ok => { if (ok) { renderLegend(); renderCalendar(); } });
+    syncToGAS();
   }
 }, 60000);
 
@@ -3326,7 +3376,7 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && gasUrl) {
     clearTimeout(_visibilityTimer);
     _visibilityTimer = setTimeout(() => {
-      loadFromGAS().then(ok => { if (ok) { renderLegend(); renderCalendar(); } });
+      syncToGAS();
     }, 500);
   }
 });
