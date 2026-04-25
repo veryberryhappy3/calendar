@@ -1527,7 +1527,7 @@ const ACC_COLORS = [
 
 // ─── Default data ───
 const DEFAULT_MEMBERS = [
-  { name:'和恵' }, { name:'悟志' }, { name:'哲平' }, { name:'その他' },
+  { name:'和恵' }, { name:'悟志' }, { name:'哲平' },
 ];
 
 const DEFAULT_RECURS = [
@@ -1607,9 +1607,9 @@ function checkLegacyData() {
     // Already loaded above — just mark migrated
     localStorage.setItem('cal_version', '2');
   }
-  // v3: 「その他」メンバーを自動追加（まだいない場合）
-  if (!members.some(m => m.name === 'その他')) {
-    members.push({ name: 'その他' });
+  // 「その他」メンバーが残っていれば除去
+  if (members.some(m => m.name === 'その他')) {
+    members = members.filter(m => m.name !== 'その他');
     localStorage.setItem('cal_members', JSON.stringify(members));
   }
 }
