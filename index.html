@@ -2699,9 +2699,13 @@ function importLegacyData() {
 }
 
 // Backdrop close
+// mousedownの開始がbackdrop上の場合のみ閉じる（入力中に欄外へドラッグしても消えない）
 ['editModal','spanModal','recurModal','membersModal','printModal','dataModal','gasModal'].forEach(id=>{
-  document.getElementById(id).addEventListener('click',function(e){
-    if(e.target!==this)return;
+  const el = document.getElementById(id);
+  let _downOnBackdrop = false;
+  el.addEventListener('mousedown', function(e){ _downOnBackdrop = (e.target === this); });
+  el.addEventListener('click', function(e){
+    if(!_downOnBackdrop || e.target !== this) return;
     if(id==='editModal')    closeEditModal();
     else if(id==='spanModal')   closeSpanModal();
     else if(id==='recurModal')  closeRecurModal();
