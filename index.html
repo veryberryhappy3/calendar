@@ -2445,8 +2445,12 @@ async function syncToGAS() {
     setSyncStatus(saved ? 'ok' : 'error');
     if (!saved) throw new Error('save failed');
 
-    renderLegend();
-    renderCalendar();
+    const ae = document.activeElement;
+    const editingInline = ae && (ae.classList.contains('day-note-input') || ae.classList.contains('week-note-input'));
+    if (!editingInline) {
+      renderLegend();
+      renderCalendar();
+    }
 
   } catch(e) {
     setSyncStatus('error');
@@ -2965,7 +2969,7 @@ function buildCalendarHtml(y, m) {
     <textarea class="week-note-input" rows="1"
       placeholder="この月のメモ（手書き用スペースとしても）"
       onclick="event.stopPropagation()"
-      oninput="saveMonthNote(${y},${m},this.value)"
+      oninput="saveMonthNote(${y},${m},this.value,false)"
       onblur="saveMonthNote(${y},${m},this.value)"
     >${esc(monthNote)}</textarea>
   </div>`;
@@ -3426,7 +3430,7 @@ function saveDayNote(day, note) {
   renderCalendar();
 }
 
-function saveMonthNote(y, m, text) {
+function saveMonthNote(y, m, text, doSync = true) {
   // allEvents の _meta キーに保存 → GAS同期に含まれる
   const monthKey = `${y}-${m}`;
   if (!allEvents[monthKey]) allEvents[monthKey] = {};
@@ -3445,7 +3449,7 @@ function saveMonthNote(y, m, text) {
   if (text.trim()) localStorage.setItem(lsKey, text);
   else             localStorage.removeItem(lsKey);
   localStorage.setItem('cal_events', JSON.stringify(allEvents));
-  if (gasUrl) syncToGAS();
+  if (doSync && gasUrl) syncToGAS();
 }
 
 // ─── 連続予定：フォームに値をセット（一覧内・バッジ共通） ───
