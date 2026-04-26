@@ -1,6 +1,6 @@
 // 家族カレンダー Service Worker
 // バージョンを上げるとキャッシュが再生成されます
-const CACHE_NAME = 'fam-cal-v1';
+const CACHE_NAME = 'fam-cal-v2';
 
 // インストール時にキャッシュするファイル（アプリシェル）
 const PRECACHE_URLS = [
