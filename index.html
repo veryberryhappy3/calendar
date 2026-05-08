@@ -2007,10 +2007,9 @@ function saveEditModal(confirmedDeleteNames = []) {
       return;
     }
 
-    // 値が変わったときだけタイムスタンプ更新
+    // 値が変わったときだけタイムスタンプ更新（削除時も残してtombstoneとして使う）
     if (v !== origVal || (v && !(m.name+'_updatedAt' in allEvents[key][editDay]))) {
-      if (v) allEvents[key][editDay][m.name+'_updatedAt'] = now;
-      else   delete allEvents[key][editDay][m.name+'_updatedAt'];
+      allEvents[key][editDay][m.name+'_updatedAt'] = now;
     }
 
     if (v) allEvents[key][editDay][m.name] = v;
@@ -2394,8 +2393,8 @@ async function syncToGAS() {
               remoteMemberKeys.forEach(mKey => {
                 const localTs  = local[mKey+'_updatedAt']       || 0;
                 const remoteTs = remoteDay[mKey+'_updatedAt']   || 0;
-                if (remoteTs > localTs || !(mKey in local)) {
-                  // リモートが新しい or ローカルにない → リモートで上書き
+                if (remoteTs > localTs || (localTs === 0 && !(mKey in local))) {
+                  // リモートが新しい or 未登録（tombstoneなし） → リモートで上書き
                   local[mKey] = remoteDay[mKey];
                   SFXS.forEach(sfx => {
                     const k = mKey + sfx;
@@ -2495,7 +2494,7 @@ async function loadFromGAS() {
             remoteMemberKeys.forEach(mKey => {
               const localTs  = local[mKey+'_updatedAt']     || 0;
               const remoteTs = remoteDay[mKey+'_updatedAt'] || 0;
-              if (remoteTs > localTs || !(mKey in local)) {
+              if (remoteTs > localTs || (localTs === 0 && !(mKey in local))) {
                 local[mKey] = remoteDay[mKey];
                 SFXS.forEach(sfx => {
                   const k = mKey + sfx;
