@@ -88,7 +88,7 @@ function loadData() {
 // ── サーバー側マージヘルパー ────────────────────────────────
 
 function mergeAllEvents(stored, incoming) {
-  const SFXS = ['_acc', '_memo', '_updatedAt', '_recur_cancel', '_recur_hidden', '_attachments', '_note'];
+  const SFXS = ['_acc', '_memo', '_updatedAt', '_recur_cancel', '_recur_hidden', '_attachments', '_note_updatedAt'];
   const merged = JSON.parse(JSON.stringify(stored));
   Object.keys(incoming).forEach(function(monthKey) {
     if (!merged[monthKey]) merged[monthKey] = {};
@@ -105,7 +105,7 @@ function mergeAllEvents(stored, incoming) {
         incomingMemberKeys.forEach(function(mKey) {
           const localTs    = local[mKey + '_updatedAt']       || 0;
           const incomingTs = incomingDay[mKey + '_updatedAt'] || 0;
-          if (incomingTs > localTs || !(mKey in local)) {
+          if (incomingTs > localTs || (localTs === 0 && !(mKey in local))) {
             local[mKey] = incomingDay[mKey];
             SFXS.forEach(function(sfx) {
               const k = mKey + sfx;

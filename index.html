@@ -1595,6 +1595,29 @@ let curY = 2026, curM = 3, editDay = null;
 let gasUrl = GAS_URL;
 let syncStatus = 'idle';
 
+// 単調増加論理クロック: デバイス時計の逆行でGASデータがローカル編集を上書きするバグを防ぐ
+let _maxKnownTs = parseInt(localStorage.getItem('_cal_maxTs') || '0');
+function nowTs() {
+  _maxKnownTs = Math.max(_maxKnownTs, Date.now());
+  localStorage.setItem('_cal_maxTs', String(_maxKnownTs));
+  return _maxKnownTs++;
+}
+function _bumpMaxTs(ts) {
+  if (typeof ts === 'number' && ts > _maxKnownTs) {
+    _maxKnownTs = ts;
+    localStorage.setItem('_cal_maxTs', String(ts));
+  }
+}
+function _scanRemoteTs(data) {
+  if (!data) return;
+  const scanDay = d => d && typeof d === 'object' && Object.entries(d).forEach(([k, v]) => {
+    if (k.endsWith('_updatedAt') && typeof v === 'number') _bumpMaxTs(v);
+  });
+  if (data.allEvents) Object.values(data.allEvents).forEach(m => m && Object.values(m).forEach(scanDay));
+  if (data.recurEvents) data.recurEvents.forEach(r => _bumpMaxTs(r._updatedAt));
+  if (data.spanEvents)  data.spanEvents.forEach(s => _bumpMaxTs(s._updatedAt));
+}
+
 // Print range state
 let printFrom = null, printTo = null, printActive = false;
 
@@ -1666,7 +1689,7 @@ function deduplicateSpans() {
   // 削除されたIDをトゥームストーンに追加
   removed.forEach(s => {
     if (!deletedSpanIds.some(d => d.id === s.id)) {
-      deletedSpanIds.push({ id: s.id, deletedAt: Date.now() });
+      deletedSpanIds.push({ id: s.id, deletedAt: nowTs() });
     }
   });
   spanEvents = [...kept];
@@ -1999,7 +2022,7 @@ function saveEditModal(confirmedDeleteNames = []) {
   if (!allEvents[key]) allEvents[key] = {};
   if (!allEvents[key][editDay]) allEvents[key][editDay] = {};
 
-  const now = Date.now();
+  const now = nowTs();
 
   members.forEach((m, mi) => {
     const v    = document.getElementById('ef_'+mi)?.value.trim() || '';
@@ -2151,7 +2174,7 @@ function toggleSMCb(label, i) {
 
 function deleteSpan(id) {
   spanEvents = spanEvents.filter(s => s.id !== id);
-  deletedSpanIds.push({ id, deletedAt: Date.now() });
+  deletedSpanIds.push({ id, deletedAt: nowTs() });
   saveData(); renderSpanList();
 }
 function saveSpanItem() {
@@ -2168,7 +2191,7 @@ function saveSpanItem() {
     // 編集モード：既存を更新
     const sp = spanEvents.find(s => s.id === eid);
     if (sp) {
-      sp.text = text; sp.from = from; sp.to = to; sp.members = mems; sp.color = spanSelectedColor; sp.memo = memo; sp._updatedAt = Date.now();
+      sp.text = text; sp.from = from; sp.to = to; sp.members = mems; sp.color = spanSelectedColor; sp.memo = memo; sp._updatedAt = nowTs();
       if (spanAttachments.length) sp.attachments = [...spanAttachments];
       else delete sp.attachments;
     }
@@ -2178,11 +2201,11 @@ function saveSpanItem() {
     if (dupIdx !== -1) {
       // 既存を上書き（重複作成を防止）
       const sp = spanEvents[dupIdx];
-      sp.members = mems; sp.color = spanSelectedColor; sp.memo = memo; sp._updatedAt = Date.now();
+      sp.members = mems; sp.color = spanSelectedColor; sp.memo = memo; sp._updatedAt = nowTs();
       if (spanAttachments.length) sp.attachments = [...spanAttachments];
       else delete sp.attachments;
     } else {
-      const newSpan = { id:uid(), text, from, to, members:mems, color:spanSelectedColor, memo, _updatedAt: Date.now() };
+      const newSpan = { id:uid(), text, from, to, members:mems, color:spanSelectedColor, memo, _updatedAt: nowTs() };
       if (spanAttachments.length) newSpan.attachments = [...spanAttachments];
       spanEvents.push(newSpan);
     }
@@ -2255,8 +2278,8 @@ function saveRecurItem() {
   const from=document.getElementById('recurFrom').value||null;
   const to=document.getElementById('recurTo').value||null;
   const eid=document.getElementById('recurEditId').value;
-  if(eid){ const r=recurEvents.find(x=>x.id===eid); if(r){r.text=text;r.dows=dows;r.members=mems;r.from=from;r.to=to;r._updatedAt=Date.now();} }
-  else recurEvents.push({id:uid(),text,members:mems,dows,from,to,_updatedAt:Date.now()});
+  if(eid){ const r=recurEvents.find(x=>x.id===eid); if(r){r.text=text;r.dows=dows;r.members=mems;r.from=from;r.to=to;r._updatedAt=nowTs();} }
+  else recurEvents.push({id:uid(),text,members:mems,dows,from,to,_updatedAt:nowTs()});
   saveData(); hideRecurForm(); renderRecurList();
 }
 document.querySelectorAll('.dow-btn').forEach(b=>b.addEventListener('click',()=>b.classList.toggle('active')));
@@ -2348,6 +2371,7 @@ async function syncToGAS() {
 
     if (loadJson.status === 'ok' && loadJson.data) {
       const remote = loadJson.data;
+      _scanRemoteTs(remote); // 時計逆行対策
 
       // ② recurEvents：タイムスタンプ付き last-write-wins マージ
       if (remote.recurEvents?.length) {
@@ -2491,6 +2515,7 @@ async function loadFromGAS() {
     const json = await res.json();
     if (json.status !== 'ok' || !json.data) { setSyncStatus('error'); return false; }
     const d = json.data;
+    _scanRemoteTs(d); // 時計逆行対策
     if (d.members && d.members.length) members = d.members;
     // allEvents：タイムスタンプ付き last-write-wins マージ
     if (d.allEvents && Object.keys(d.allEvents).length) {
@@ -3438,8 +3463,8 @@ function saveDayNote(day, note) {
   const key = `${curY}-${curM}`;
   if (!allEvents[key]) allEvents[key] = {};
   if (!allEvents[key][day]) allEvents[key][day] = {};
-  if (note) allEvents[key][day]['_note'] = note;
-  else      delete allEvents[key][day]['_note'];
+  if (note) { allEvents[key][day]['_note'] = note; allEvents[key][day]['_note_updatedAt'] = nowTs(); }
+  else      { delete allEvents[key][day]['_note']; delete allEvents[key][day]['_note_updatedAt']; }
   if (!Object.keys(allEvents[key][day]).length) delete allEvents[key][day];
   // ローカル保存のみ（GAS同期は自動同期に委ねて即時syncを避ける）
   localStorage.setItem('cal_events', JSON.stringify(allEvents));
@@ -3453,7 +3478,7 @@ function saveMonthNote(y, m, text, doSync = true) {
   if (!allEvents[monthKey]['_meta']) allEvents[monthKey]['_meta'] = {};
   if (text.trim()) {
     allEvents[monthKey]['_meta']['_monthNote'] = text;
-    allEvents[monthKey]['_meta']['_monthNote_updatedAt'] = Date.now();
+    allEvents[monthKey]['_meta']['_monthNote_updatedAt'] = nowTs();
   } else {
     delete allEvents[monthKey]['_meta']['_monthNote'];
     delete allEvents[monthKey]['_meta']['_monthNote_updatedAt'];
