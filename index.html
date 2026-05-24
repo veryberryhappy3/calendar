@@ -2319,6 +2319,7 @@ let _syncLock = false;
 let _syncPending = false;
 // インライン編集中フラグ：activeElementチェックの隙間を埋める
 let _editingInline = false;
+let _monthNoteSaveTimer = null;
 let _monthNoteSyncTimer = null;
 
 async function syncToGAS() {
@@ -3440,7 +3441,8 @@ function saveDayNote(day, note) {
   if (note) allEvents[key][day]['_note'] = note;
   else      delete allEvents[key][day]['_note'];
   if (!Object.keys(allEvents[key][day]).length) delete allEvents[key][day];
-  saveData();
+  // ローカル保存のみ（GAS同期は自動同期に委ねて即時syncを避ける）
+  localStorage.setItem('cal_events', JSON.stringify(allEvents));
   renderCalendar();
 }
 
@@ -3462,12 +3464,16 @@ function saveMonthNote(y, m, text, doSync = true) {
   const lsKey = `note_${y}_${m}`;
   if (text.trim()) localStorage.setItem(lsKey, text);
   else             localStorage.removeItem(lsKey);
-  // 全体JSONシリアライズとGAS同期はデバウンス（入力中のたびに重い処理が走るのを防ぐ）
-  clearTimeout(_monthNoteSyncTimer);
-  _monthNoteSyncTimer = setTimeout(() => {
+  // 全体JSONはデバウンス600ms（入力中の重い処理を抑制）
+  clearTimeout(_monthNoteSaveTimer);
+  _monthNoteSaveTimer = setTimeout(() => {
     localStorage.setItem('cal_events', JSON.stringify(allEvents));
-    if (doSync && gasUrl) syncToGAS();
-  }, 1500);
+  }, 600);
+  // GAS同期はblur後1分以上空けてから実行（入力直後の再レンダリングを防ぐ）
+  if (doSync && gasUrl) {
+    clearTimeout(_monthNoteSyncTimer);
+    _monthNoteSyncTimer = setTimeout(() => syncToGAS(), 60000);
+  }
 }
 
 // ─── 連続予定：フォームに値をセット（一覧内・バッジ共通） ───
