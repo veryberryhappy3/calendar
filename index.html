@@ -1980,7 +1980,14 @@ async function closeEditModal() {
       .map(d => `・${d.m.name}「${(mev[d.m.name]||'').slice(0, 20)}」`)
       .join('\n');
     const ok = await showConfirm(`以下の予定を削除します。よろしいですか？\n\n${lines}`);
-    if (!ok) return;
+    if (!ok) {
+      // キャンセル時は元のテキストを復元して編集を継続できるようにする
+      pendingDels.forEach(d => {
+        const ta = document.getElementById('ef_' + d.mi);
+        if (ta) ta.value = mev[d.m.name] || '';
+      });
+      return;
+    }
   }
 
   saveEditModal(pendingDels.map(d => d.m.name));
@@ -2310,6 +2317,9 @@ function setSyncStatus(s) {
 // ── 同期ロック：同時に複数の同期が走らないようにする ──
 let _syncLock = false;
 let _syncPending = false;
+// インライン編集中フラグ：activeElementチェックの隙間を埋める
+let _editingInline = false;
+let _monthNoteSyncTimer = null;
 
 async function syncToGAS() {
   if (!gasUrl) return;
@@ -2445,7 +2455,8 @@ async function syncToGAS() {
     if (!saved) throw new Error('save failed');
 
     const ae = document.activeElement;
-    const editingInline = ae && (ae.classList.contains('day-note-input') || ae.classList.contains('week-note-input'));
+    const editingInline = _editingInline ||
+      (ae && (ae.classList.contains('day-note-input') || ae.classList.contains('week-note-input')));
     if (!editingInline) {
       renderLegend();
       renderCalendar();
@@ -2703,18 +2714,19 @@ function importLegacyData() {
 
 // Backdrop close
 // mousedownの開始がbackdrop上の場合のみ閉じる（入力中に欄外へドラッグしても消えない）
-['editModal','spanModal','recurModal','membersModal','printModal','dataModal','gasModal'].forEach(id=>{
+['editModal','spanModal','recurModal','membersModal','printModal','dataModal','gasModal','confirmModal'].forEach(id=>{
   const el = document.getElementById(id);
   let _downOnBackdrop = false;
   el.addEventListener('mousedown', function(e){ _downOnBackdrop = (e.target === this); });
   el.addEventListener('click', function(e){
     if(!_downOnBackdrop || e.target !== this) return;
-    if(id==='editModal')    closeEditModal();
-    else if(id==='spanModal')   closeSpanModal();
-    else if(id==='recurModal')  closeRecurModal();
-    else if(id==='printModal')  closePrintModal();
-    else if(id==='dataModal')   closeDataModal();
-    else if(id==='gasModal')    closeGasModal();
+    if(id==='editModal')      closeEditModal();
+    else if(id==='spanModal')    closeSpanModal();
+    else if(id==='recurModal')   closeRecurModal();
+    else if(id==='printModal')   closePrintModal();
+    else if(id==='dataModal')    closeDataModal();
+    else if(id==='gasModal')     closeGasModal();
+    else if(id==='confirmModal') confirmCancel();
     else closeMembersModal();
   });
 });
@@ -2968,8 +2980,9 @@ function buildCalendarHtml(y, m) {
     <textarea class="week-note-input" rows="1"
       placeholder="この月のメモ（手書き用スペースとしても）"
       onclick="event.stopPropagation()"
+      onfocus="_editingInline=true"
       oninput="saveMonthNote(${y},${m},this.value,false)"
-      onblur="saveMonthNote(${y},${m},this.value)"
+      onblur="_editingInline=false;saveMonthNote(${y},${m},this.value)"
     >${esc(monthNote)}</textarea>
   </div>`;
 
@@ -3392,6 +3405,7 @@ document.addEventListener('visibilitychange', () => {
 function openDayNote(day, triggerEl) {
   // すでに編集中なら何もしない
   if (triggerEl.tagName === 'TEXTAREA') return;
+  _editingInline = true;
 
   const area = triggerEl.closest('.day-note-area');
   const currentNote = triggerEl.classList.contains('day-note-text') ? triggerEl.textContent : '';
@@ -3412,13 +3426,14 @@ function openDayNote(day, triggerEl) {
   ta.addEventListener('blur', save);
   ta.addEventListener('keydown', e => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ta.blur(); }
-    if (e.key === 'Escape') { ta.removeEventListener('blur', save); ta.blur(); renderCalendar(); }
+    if (e.key === 'Escape') { _editingInline = false; ta.removeEventListener('blur', save); ta.blur(); renderCalendar(); }
   });
   // クリック伝播を止める
   ta.addEventListener('click', e => e.stopPropagation());
 }
 
 function saveDayNote(day, note) {
+  _editingInline = false;
   const key = `${curY}-${curM}`;
   if (!allEvents[key]) allEvents[key] = {};
   if (!allEvents[key][day]) allEvents[key][day] = {};
@@ -3443,12 +3458,16 @@ function saveMonthNote(y, m, text, doSync = true) {
     if (!Object.keys(allEvents[monthKey]['_meta']).length) delete allEvents[monthKey]['_meta'];
     if (!Object.keys(allEvents[monthKey]).length) delete allEvents[monthKey];
   }
-  // 後方互換：localStorageにも保存
+  // テキスト専用キーは即時保存（ページ離脱時のデータ保護）
   const lsKey = `note_${y}_${m}`;
   if (text.trim()) localStorage.setItem(lsKey, text);
   else             localStorage.removeItem(lsKey);
-  localStorage.setItem('cal_events', JSON.stringify(allEvents));
-  if (doSync && gasUrl) syncToGAS();
+  // 全体JSONシリアライズとGAS同期はデバウンス（入力中のたびに重い処理が走るのを防ぐ）
+  clearTimeout(_monthNoteSyncTimer);
+  _monthNoteSyncTimer = setTimeout(() => {
+    localStorage.setItem('cal_events', JSON.stringify(allEvents));
+    if (doSync && gasUrl) syncToGAS();
+  }, 1500);
 }
 
 // ─── 連続予定：フォームに値をセット（一覧内・バッジ共通） ───
