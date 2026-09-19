@@ -124,19 +124,32 @@ function mergeAllEvents(stored, incoming) {
   return merged;
 }
 
-function mergeRecurEvents(stored, incoming) {
-  const result = JSON.parse(JSON.stringify(stored));
-  const storedMap = {};
-  result.forEach(function(r, i) { storedMap[r.id] = i; });
+function mergeRecurEvents(stored, incoming, allDeletedIds) {
+  const deletedSet = {};
+  (allDeletedIds || []).forEach(function(d) { deletedSet[d.id] = true; });
+  const result = JSON.parse(JSON.stringify(stored)).filter(function(r) { return !deletedSet[r.id]; });
+  const resultMap = {};
+  result.forEach(function(r, i) { resultMap[r.id] = i; });
   incoming.forEach(function(r) {
-    if (r.id in storedMap) {
-      if ((r._updatedAt || 0) > (result[storedMap[r.id]]._updatedAt || 0)) {
-        result[storedMap[r.id]] = r;
+    if (deletedSet[r.id]) return;
+    if (r.id in resultMap) {
+      if ((r._updatedAt || 0) > (result[resultMap[r.id]]._updatedAt || 0)) {
+        result[resultMap[r.id]] = r;
       }
     } else {
-      storedMap[r.id] = result.length;
+      resultMap[r.id] = result.length;
       result.push(r);
     }
+  });
+  return result;
+}
+
+function mergeDeletedRecurIds(stored, incoming) {
+  const result = JSON.parse(JSON.stringify(stored));
+  const storedSet = {};
+  stored.forEach(function(d) { storedSet[d.id] = true; });
+  incoming.forEach(function(d) {
+    if (!storedSet[d.id]) { result.push(d); storedSet[d.id] = true; }
   });
   return result;
 }
@@ -179,11 +192,14 @@ function saveData(body) {
     const raw = sheet.getRange('B1').getValue();
     const stored = raw ? JSON.parse(raw) : {
       members: [], allEvents: {}, recurEvents: [],
-      spanEvents: [], deletedSpanIds: [], attachmentsData: {}
+      spanEvents: [], deletedSpanIds: [], deletedRecurIds: [], attachmentsData: {}
     };
 
     const incomingDeletedSpanIds = body.deletedSpanIds || [];
     const mergedDeletedSpanIds   = mergeDeletedSpanIds(stored.deletedSpanIds || [], incomingDeletedSpanIds);
+
+    const incomingDeletedRecurIds = body.deletedRecurIds || [];
+    const mergedDeletedRecurIds   = mergeDeletedRecurIds(stored.deletedRecurIds || [], incomingDeletedRecurIds);
 
     const incomingMembers = body.members || [];
     const mergedMembers   = incomingMembers.length >= (stored.members || []).length
@@ -196,9 +212,10 @@ function saveData(body) {
     const data = {
       members:         mergedMembers,
       allEvents:       mergeAllEvents(stored.allEvents || {}, body.allEvents || {}),
-      recurEvents:     mergeRecurEvents(stored.recurEvents || [], body.recurEvents || []),
+      recurEvents:     mergeRecurEvents(stored.recurEvents || [], body.recurEvents || [], mergedDeletedRecurIds),
       spanEvents:      mergeSpanEvents(stored.spanEvents || [], body.spanEvents || [], mergedDeletedSpanIds),
       deletedSpanIds:  mergedDeletedSpanIds,
+      deletedRecurIds: mergedDeletedRecurIds,
       attachmentsData: mergedAttachments,
       _savedAt:        new Date().toISOString(),
     };

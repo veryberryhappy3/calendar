@@ -1591,6 +1591,7 @@ let allEvents   = JSON.parse(localStorage.getItem('cal_events')  || 'null') || s
 let recurEvents = JSON.parse(localStorage.getItem('cal_recurs')  || 'null') || structuredClone(DEFAULT_RECURS);
 let spanEvents  = JSON.parse(localStorage.getItem('cal_spans')   || 'null') || structuredClone(DEFAULT_SPANS);
 let deletedSpanIds = JSON.parse(localStorage.getItem('cal_deleted_spans') || '[]');
+let deletedRecurIds = JSON.parse(localStorage.getItem('cal_deleted_recurs') || '[]');
 let curY = 2026, curM = 3, editDay = null;
 let gasUrl = GAS_URL;
 let syncStatus = 'idle';
@@ -2266,7 +2267,7 @@ function renderRecurMCbs(selected) {
   }).join('');
 }
 function toggleRCb(label,i){ const cb=document.getElementById('rcb_'+i); cb.checked=!cb.checked; label.classList.toggle('checked',cb.checked); }
-function deleteRecur(id){ if(!confirm('削除しますか？'))return; recurEvents=recurEvents.filter(r=>r.id!==id); saveData(); renderRecurList(); }
+function deleteRecur(id){ if(!confirm('削除しますか？'))return; recurEvents=recurEvents.filter(r=>r.id!==id); if(!deletedRecurIds.some(d=>d.id===id)) deletedRecurIds.push({ id, deletedAt: Date.now() }); saveData(); renderRecurList(); }
 
 function saveRecurItem() {
   const text=document.getElementById('recurText').value.trim();
@@ -2311,6 +2312,7 @@ function saveData() {
   localStorage.setItem('cal_recurs',        JSON.stringify(recurEvents));
   localStorage.setItem('cal_spans',         JSON.stringify(spanEvents));
   localStorage.setItem('cal_deleted_spans', JSON.stringify(deletedSpanIds));
+  localStorage.setItem('cal_deleted_recurs',JSON.stringify(deletedRecurIds));
   localStorage.setItem('cal_version','2');
   if (gasUrl) syncToGAS();
 }
@@ -2359,6 +2361,7 @@ async function syncToGAS() {
     recurEvents:    JSON.parse(JSON.stringify(recurEvents)),
     spanEvents:     JSON.parse(JSON.stringify(spanEvents)),
     deletedSpanIds: JSON.parse(JSON.stringify(deletedSpanIds)),
+    deletedRecurIds:JSON.parse(JSON.stringify(deletedRecurIds)),
   };
 
   try {
@@ -2373,16 +2376,24 @@ async function syncToGAS() {
       const remote = loadJson.data;
       _scanRemoteTs(remote); // 時計逆行対策
 
-      // ② recurEvents：タイムスタンプ付き last-write-wins マージ
+      // ② recurEvents：削除トゥームストーンとタイムスタンプを考慮したマージ
+      // まずリモートの削除情報をローカルに適用
+      if (remote.deletedRecurIds?.length) {
+        const remoteDelSet = new Set(remote.deletedRecurIds.map(d => d.id));
+        recurEvents = recurEvents.filter(r => !remoteDelSet.has(r.id));
+        const localDelSet = new Set(deletedRecurIds.map(d => d.id));
+        remote.deletedRecurIds.forEach(d => { if (!localDelSet.has(d.id)) deletedRecurIds.push(d); });
+      }
+      // 次に各リモート定例を処理（削除済みならスキップ、タイムスタンプで勝者決定）
       if (remote.recurEvents?.length) {
-        const localMap = new Map(recurEvents.map(r => [r.id, r]));
         remote.recurEvents.forEach(r => {
-          const loc = localMap.get(r.id);
-          if (!loc) {
+          const delEntry = deletedRecurIds.find(d => d.id === r.id);
+          if (delEntry && (delEntry.deletedAt || 0) >= (r._updatedAt || 0)) return;
+          const li = recurEvents.findIndex(x => x.id === r.id);
+          if (li === -1) {
             recurEvents.push(r);
-          } else if ((r._updatedAt || 0) > (loc._updatedAt || 0)) {
-            const idx = recurEvents.findIndex(x => x.id === r.id);
-            if (idx !== -1) recurEvents[idx] = r;
+          } else if ((r._updatedAt || 0) > (recurEvents[li]._updatedAt || 0)) {
+            recurEvents[li] = r;
           }
         });
       }
@@ -2454,6 +2465,7 @@ async function syncToGAS() {
       localStorage.setItem('cal_recurs',        JSON.stringify(recurEvents));
       localStorage.setItem('cal_spans',         JSON.stringify(spanEvents));
       localStorage.setItem('cal_deleted_spans', JSON.stringify(deletedSpanIds));
+      localStorage.setItem('cal_deleted_recurs',JSON.stringify(deletedRecurIds));
       localStorage.setItem('cal_events',        JSON.stringify(allEvents));
       // 添付ファイルデータをIndexedDBに保存
       if (remote.attachmentsData) await restoreAttachmentsFromSync(remote.attachmentsData);
@@ -2464,7 +2476,7 @@ async function syncToGAS() {
     let saved = false;
     for (let attempt = 0; attempt < 2 && !saved; attempt++) {
       try {
-        const body = JSON.stringify({ action: 'save_all', members, allEvents, recurEvents, spanEvents, deletedSpanIds, attachmentsData });
+        const body = JSON.stringify({ action: 'save_all', members, allEvents, recurEvents, spanEvents, deletedSpanIds, deletedRecurIds, attachmentsData });
         const saveCtrl = new AbortController();
         const saveTimer = setTimeout(() => saveCtrl.abort(), 20000);
         const res  = await fetch(gasUrl, { method:'POST', redirect:'follow', headers:{'Content-Type':'text/plain'}, body, signal: saveCtrl.signal });
@@ -2548,17 +2560,20 @@ async function loadFromGAS() {
         });
       });
     }
-    // recurEvents：タイムスタンプ付き last-write-wins マージ
+    // recurEvents：削除トゥームストーンとタイムスタンプを考慮したスマートマージ
+    if (d.deletedRecurIds?.length) {
+      const remoteDelSet = new Set(d.deletedRecurIds.map(e => e.id));
+      recurEvents = recurEvents.filter(r => !remoteDelSet.has(r.id));
+      const localDelSet = new Set(deletedRecurIds.map(e => e.id));
+      d.deletedRecurIds.forEach(e => { if (!localDelSet.has(e.id)) deletedRecurIds.push(e); });
+    }
     if (d.recurEvents?.length) {
-      const localMap = new Map(recurEvents.map(r => [r.id, r]));
       d.recurEvents.forEach(r => {
-        const loc = localMap.get(r.id);
-        if (!loc) {
-          recurEvents.push(r);
-        } else if ((r._updatedAt || 0) > (loc._updatedAt || 0)) {
-          const idx = recurEvents.findIndex(x => x.id === r.id);
-          if (idx !== -1) recurEvents[idx] = r;
-        }
+        const delEntry = deletedRecurIds.find(e => e.id === r.id);
+        if (delEntry && (delEntry.deletedAt || 0) >= (r._updatedAt || 0)) return;
+        const li = recurEvents.findIndex(x => x.id === r.id);
+        if (li === -1) recurEvents.push(r);
+        else if ((r._updatedAt || 0) > (recurEvents[li]._updatedAt || 0)) recurEvents[li] = r;
       });
     }
     // spanEvents：削除トゥームストーンとタイムスタンプを考慮したスマートマージ
@@ -2584,6 +2599,7 @@ async function loadFromGAS() {
     localStorage.setItem('cal_recurs',        JSON.stringify(recurEvents));
     localStorage.setItem('cal_spans',         JSON.stringify(spanEvents));
     localStorage.setItem('cal_deleted_spans', JSON.stringify(deletedSpanIds));
+    localStorage.setItem('cal_deleted_recurs',JSON.stringify(deletedRecurIds));
     // 添付ファイルデータをIndexedDBに保存（新しいデバイスでも写真が見られる）
     if (d.attachmentsData) await restoreAttachmentsFromSync(d.attachmentsData);
     setSyncStatus('ok');
@@ -2682,7 +2698,7 @@ function exportData() {
   const payload = {
     version: 2,
     exportedAt: new Date().toISOString(),
-    members, allEvents, recurEvents, spanEvents
+    members, allEvents, recurEvents, spanEvents, deletedSpanIds, deletedRecurIds
   };
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
   const url  = URL.createObjectURL(blob);
@@ -2705,6 +2721,8 @@ function importData(input) {
       if (data.allEvents)   allEvents   = data.allEvents;
       if (data.recurEvents) recurEvents = data.recurEvents;
       if (data.spanEvents)  spanEvents  = data.spanEvents;
+      if (data.deletedSpanIds)  deletedSpanIds  = data.deletedSpanIds;
+      if (data.deletedRecurIds) deletedRecurIds = data.deletedRecurIds;
       saveData();
       closeDataModal();
       renderLegend();
@@ -2724,6 +2742,8 @@ function resetAllData() {
   allEvents   = structuredClone(DEFAULT_EVENTS);
   recurEvents = structuredClone(DEFAULT_RECURS);
   spanEvents  = structuredClone(DEFAULT_SPANS);
+  deletedSpanIds  = [];
+  deletedRecurIds = [];
   saveData();
   closeDataModal();
   renderLegend();
